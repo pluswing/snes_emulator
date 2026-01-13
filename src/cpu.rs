@@ -87,15 +87,22 @@ const FLAG_NEGATIVE: u8 = 1 << 7;
 
 const SIGN_BIT: u8 = 1 << 7;
 
+const MODE_16BIT: u8 = 0;
+const MODE_8BIT: u8 = 1;
+
 pub struct CPU<'a> {
-    pub register_a: u8,
-    pub register_x: u8,
-    pub register_y: u8,
-    pub status: u8,
+    pub register_a: u16, // u8モードの時もあり。
+    pub register_x: u16,
+    pub register_y: u16,
     pub program_counter: u16,
-    pub stack_pointer: u8,
-    // pub memory: [u8; 0x10000], // 0xFFFF
-    pub bus: Bus<'a>,
+    pub stack_pointer: u16, // u8モードの時もあり。
+    pub status: u8,
+    pub zero_page_offset: u16,
+    pub data_bank: u8,
+    pub prgram_counter_bank: u8,
+    pub mode: u8,
+    pub memory: [u8; 0x100_0000], // 0xFFFFFF
+    // pub bus: Bus<'a>,
 
     add_cycles: u8,
 }
@@ -112,22 +119,26 @@ impl Mem for CPU<'_> {
     }
 }
 
-impl<'a> CPU<'a> {
-    pub fn new(bus: Bus<'a>) -> CPU<'a> {
-        CPU {
+impl CPU {
+    pub fn new() -> Self {
+        Self {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            status: FLAG_INTERRRUPT | FLAG_BREAK2, // FIXME あってる？
             program_counter: 0,
-            stack_pointer: 0xFD, // FIXME あってる？
-            // memory: [0x00; 0x10000],
-            bus: bus,
+            status: FLAG_INTERRRUPT | FLAG_BREAK2,
+            stack_pointer: 0xFD,
+            zero_page_offset: 0,
+            data_bank: 0,
+            prgram_counter_bank: 0,
+            mode: MODE_16BIT,
+            memory: [0x00; 0x100_0000],
+            // bus: bus,
             add_cycles: 0,
         }
     }
 
-    fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
+    fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         match mode {
             AddressingMode::Implied => {
                 panic!("AddressingMode::Implied");
@@ -139,7 +150,10 @@ impl<'a> CPU<'a> {
             AddressingMode::Immediate => self.program_counter,
 
             // LDA $44 => a5 44
-            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::ZeroPage => {
+              let addr = self.mem_read(self.program_counter);
+              self.zero_page_offset << 16 | addr
+            },
 
             // LDA $4400 => ad 00 44
             AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
@@ -212,14 +226,16 @@ impl<'a> CPU<'a> {
                 let np = (base as i8) as i32 + self.program_counter as i32;
                 return np as u16;
             }
-            // LDA $123456 AF 12 56 34
+            // LDA long => AF 12 56 34
             AddressingMode::Absolute_Long => {
               let addr = self.mem_read_u16(self.program_counter);
-              let bank = self.mem_read_u8(self.program_counter + 2);
+              let bank = self.mem_read(self.program_counter + 2);
               bank << 16 | addr
             },
+            // LDA dp => A5 FF
             AddressingMode::Direct_Page => {
-              todo!("Direct_Page")
+              let addr = self.mem_read(self.program_counter);
+              addr as u32
             },
             AddressingMode::Direct_Page_Indirect => {
               todo!("Direct_Page_Indirect")
