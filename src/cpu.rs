@@ -97,10 +97,10 @@ pub struct CPU<'a> {
     pub program_counter: u16,
     pub stack_pointer: u16, // u8モードの時もあり。
     pub status: u8,
-    pub zero_page_offset: u16,
-    pub data_bank: u8,
-    pub prgram_counter_bank: u8,
-    pub mode: u8,
+    pub zero_page_offset: u16, // ダイレクトページレジスタ (D)
+    pub data_bank: u8, // データバンクレジスタ (DBR)
+    pub prgram_counter_bank: u8, // プログラムバンクレジスタ (PBR)
+    pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
     pub memory: [u8; 0x100_0000], // 0xFFFFFF
     // pub bus: Bus<'a>,
 
@@ -152,7 +152,7 @@ impl CPU {
             // LDA $44 => a5 44
             AddressingMode::ZeroPage => {
               let addr = self.mem_read(self.program_counter);
-              self.zero_page_offset << 16 | addr
+              addr
             },
 
             // LDA $4400 => ad 00 44
@@ -235,13 +235,23 @@ impl CPU {
             // LDA dp => A5 FF
             AddressingMode::Direct_Page => {
               let addr = self.mem_read(self.program_counter);
-              addr as u32
+              self.zero_page_offset.wrapping_add(addr) as u32
             },
+            // LDA ($12) => B2 12
             AddressingMode::Direct_Page_Indirect => {
-              todo!("Direct_Page_Indirect")
+              let base: u16 = self.mem_read_u16(self.program_counter);
+              let addr = self.mem_read_u16(self.zero_page_offset.wrapping_add(base));
+              (self.data_bank << 16 | addr) as u32
             },
+            // LDA [$12] => A7 12
             AddressingMode::Direct_Page_Indirect_Long => {
-              todo!("Direct_Page_Indirect_Long")
+              let base: u16 = self.mem_read_u16(self.program_counter);
+              let base = self.zero_page_offset.wrapping_add(base);
+              // 12 13 14
+              // AA BB CC => CC:BBAA
+              let addr = self.mem_read_u16(base);
+              let bank = self.mem_read(base + 2);
+              bank << 16 | addr
             },
             AddressingMode::Absolute_Long_Indexed_X => {
               todo!("Absolute_Long_Indexed_X")
