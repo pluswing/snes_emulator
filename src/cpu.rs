@@ -28,7 +28,8 @@ pub enum AddressingMode {
     Direct_Page_Indirect,
     Direct_Page_Indirect_Long,
     Absolute_Long_Indexed_X, // Absolute Long Indexed by X
-    Direct_Page_X, // Direct Page Indexed by X
+    Direct_Page_Indexed_X, // Direct Page Indexed by X
+    Direct_Page_Indexed_Y, // Direct Page Indexed by Y
     Direct_Page_Indirect_X, // Direct Page Indexed Indirect by X
     Direct_Page_Indirect_Y, // Direct Page Indirect Indexed by Y
     Direct_Page_Indirect_Long_Indexed_Y, // Direct Page Indirect Long Indexed by Y
@@ -97,9 +98,9 @@ pub struct CPU<'a> {
     pub program_counter: u16,
     pub stack_pointer: u16, // u8モードの時もあり。
     pub status: u8,
-    pub zero_page_offset: u16, // ダイレクトページレジスタ (D)
+    pub direct_page: u16, // ダイレクトページレジスタ (D)
     pub data_bank: u8, // データバンクレジスタ (DBR)
-    pub prgram_counter_bank: u8, // プログラムバンクレジスタ (PBR)
+    pub prgram_bank: u8, // プログラムバンクレジスタ (PBR)
     pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
     pub memory: [u8; 0x100_0000], // 0xFFFFFF
     // pub bus: Bus<'a>,
@@ -139,6 +140,7 @@ impl CPU {
     }
 
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
+      let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
         match mode {
             AddressingMode::Implied => {
                 panic!("AddressingMode::Implied");
@@ -147,34 +149,34 @@ impl CPU {
                 panic!("AddressingMode::Accumulator");
             }
             // LDA #$44 => a9 44
-            AddressingMode::Immediate => self.program_counter,
+            AddressingMode::Immediate => pc,
 
             // LDA $44 => a5 44
             AddressingMode::ZeroPage => {
-              let addr = self.mem_read(self.program_counter);
+              let addr = self.mem_read(pc);
               addr
             },
 
             // LDA $4400 => ad 00 44
-            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
+            AddressingMode::Absolute => self.mem_read_u16(pc),
 
             // LDA $44,X => b5 44
             AddressingMode::ZeroPage_X => {
-                let pos = self.mem_read(self.program_counter);
+                let pos = self.mem_read(pc);
                 let addr = pos.wrapping_add(self.register_x) as u16;
                 addr
             }
 
             // LDX $44,Y => b6 44
             AddressingMode::ZeroPage_Y => {
-                let pos = self.mem_read(self.program_counter);
+                let pos = self.mem_read(pc);
                 let addr = pos.wrapping_add(self.register_y) as u16;
                 addr
             }
 
             // LDA $4400,X => bd 00 44
             AddressingMode::Absolute_X => {
-                let base = self.mem_read_u16(self.program_counter);
+                let base = self.mem_read_u16(pc);
                 let addr = base.wrapping_add(self.register_x as u16);
                 // (+1 if page crossed)
                 if base & 0xFF00 != addr & 0xFF00 {
@@ -185,7 +187,7 @@ impl CPU {
 
             // LDA $4400,Y => b9 00 44
             AddressingMode::Absolute_Y => {
-                let base = self.mem_read_u16(self.program_counter);
+                let base = self.mem_read_u16(pc);
                 let addr = base.wrapping_add(self.register_y as u16);
                 // (+1 if page crossed)
                 if base & 0xFF00 != addr & 0xFF00 {
@@ -195,14 +197,14 @@ impl CPU {
             }
             // JMP -> same Absolute
             AddressingMode::Indirect => {
-                let base = self.mem_read_u16(self.program_counter);
+                let base = self.mem_read_u16(pc);
                 let addr = self.mem_read_u16(base);
                 addr
             }
 
             // LDA ($44,X) => a1 44
             AddressingMode::Indirect_X => {
-                let base = self.mem_read(self.program_counter);
+                let base = self.mem_read(pc);
                 let ptr: u8 = (base as u8).wrapping_add(self.register_x);
                 let addr = self.mem_read_u16(ptr as u16);
                 addr
@@ -210,7 +212,7 @@ impl CPU {
 
             // LDA ($44),Y => b1 44
             AddressingMode::Indirect_Y => {
-                let base = self.mem_read(self.program_counter);
+                let base = self.mem_read(pc);
                 let deref_base = self.mem_read_u16(base as u16);
                 let deref = deref_base.wrapping_add(self.register_y as u16);
                 // (+1 if page crossed)
@@ -222,48 +224,68 @@ impl CPU {
 
             // BCC *+4 => 90 04
             AddressingMode::Relative => {
-                let base = self.mem_read(self.program_counter);
-                let np = (base as i8) as i32 + self.program_counter as i32;
+                let base = self.mem_read(pc);
+                let np = (base as i8) as i32 + pc as i32;
                 return np as u16;
             }
+
             // LDA long => AF 12 56 34
             AddressingMode::Absolute_Long => {
-              let addr = self.mem_read_u16(self.program_counter);
-              let bank = self.mem_read(self.program_counter + 2);
-              bank << 16 | addr
+              let addr = self.mem_read_u16(pc);
+              let bank = self.mem_read(pc + 2);
+              (bank as u32) << 16 | addr as u32
             },
             // LDA dp => A5 FF
             AddressingMode::Direct_Page => {
-              let addr = self.mem_read(self.program_counter);
-              self.zero_page_offset.wrapping_add(addr) as u32
+              let addr = self.mem_read(pc);
+              (self.direct_page as u32).wrapping_add(addr)
             },
             // LDA ($12) => B2 12
             AddressingMode::Direct_Page_Indirect => {
-              let base: u16 = self.mem_read_u16(self.program_counter);
-              let addr = self.mem_read_u16(self.zero_page_offset.wrapping_add(base));
-              (self.data_bank << 16 | addr) as u32
+              let base: u16 = self.mem_read_u16(pc);
+              let addr = self.mem_read_u16((self.direct_page as u32).wrapping_add(base as u32));
+              ((self.data_bank as u32) << 16 | addr) as u32
             },
             // LDA [$12] => A7 12
             AddressingMode::Direct_Page_Indirect_Long => {
-              let base: u16 = self.mem_read_u16(self.program_counter);
-              let base = self.zero_page_offset.wrapping_add(base);
+              let base: u16 = self.mem_read_u16(pc);
+              let base = (self.direct_page as u32).wrapping_add(base as u32);
               // 12 13 14
               // AA BB CC => CC:BBAA
               let addr = self.mem_read_u16(base);
               let bank = self.mem_read(base + 2);
-              bank << 16 | addr
+              (bank as u32) << 16 | addr as u32
             },
-            AddressingMode::Absolute_Long_Indexed_X => {
-              todo!("Absolute_Long_Indexed_X")
+            // LDA dp, X => B5 dp
+            AddressingMode::Direct_Page_Indexed_X => {
+              let addr = self.mem_read(pc);
+              let addr = (self.direct_page as u32).wrapping_add(addr) as u32;
+              addr.wrapping_add(self.register_x as u32)
             },
-            AddressingMode::Direct_Page_X => {
-              todo!("Direct_Page_X")
+            // TODO LDAには無いアドレッシングモード
+            AddressingMode::Direct_Page_Indexed_Y => {
+              let addr = self.mem_read(pc);
+              let addr = self.direct_page.wrapping_add(addr) as u32;
+              addr.wrapping_add(self.register_y as u32)
             },
+            // LDA (dp, X) => A1 dp
             AddressingMode::Direct_Page_Indirect_X => {
-              todo!("Direct_Page_Indirect_X")
+              let addr = self.mem_read(pc);
+              let addr = (self.direct_page as u32).wrapping_add(addr);
+              let addr = addr.wrapping_add(self.register_x as u32);
+              let addr = self.mem_read_u16(addr);
+              (self.data_bank as u32) << 16 | addr as u32
             },
+            // LDA (dp, Y) => B1 dp
             AddressingMode::Direct_Page_Indirect_Y => {
-              todo!("Direct_Page_Indirect_Y")
+              let addr = self.mem_read(pc);
+              let addr = (self.direct_page as u32).wrapping_add(addr);
+              let addr = addr.wrapping_add(self.register_y as u32);
+              let addr = self.mem_read_u16(addr);
+              (self.data_bank as u32) << 16 | addr as u32
+            },
+            AddressingMode::Absolute_Long_Indexed_X x=> {
+              todo!("Absolute_Long_Indexed_X")
             },
             AddressingMode::Direct_Page_Indirect_Long_Indexed_Y => {
               todo!("Direct_Page_Indirect_Long_Indexed_Y")
@@ -281,7 +303,7 @@ impl CPU {
         }
     }
 
-    pub fn mem_read_u16(&mut self, pos: u16) -> u16 {
+    pub fn mem_read_u16(&mut self, pos: u32) -> u16 {
         // FIXME
         if pos == 0x00FF || pos == 0x02FF {
             debug!("mem_read_u16 page boundary. {:04X}", pos);
@@ -294,7 +316,7 @@ impl CPU {
         (hi << 8) | (lo as u16)
     }
 
-    pub fn mem_write_u16(&mut self, pos: u16, data: u16) {
+    pub fn mem_write_u16(&mut self, pos: u32, data: u16) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0x00FF) as u8;
         self.mem_write(pos, lo);
