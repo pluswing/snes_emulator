@@ -2,6 +2,8 @@ use serde::{Serialize, Deserialize};
 use std::fs;
 use std::io::prelude::*;
 
+mod cpu;
+
 /*
 {
   "name": "a9 n 1",

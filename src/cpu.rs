@@ -106,7 +106,7 @@ pub struct CPU {
 }
 
 pub static mut IN_TRACE: bool = false;
-
+/*
 impl Mem for CPU {
     fn mem_read(&mut self, addr: u16) -> u8 {
         self.bus.mem_read(addr)
@@ -116,8 +116,18 @@ impl Mem for CPU {
         self.bus.mem_write(addr, data)
     }
 }
+*/
 
 impl CPU {
+
+    // for TEST
+    fn mem_read(&mut self, addr: u32) -> u8 {
+        self.memory[addr]
+    }
+    fn mem_write(&mut self, addr: u32, data: u8) {
+        self.memory[addr] = data;
+    }
+
     pub fn new() -> Self {
         Self {
             register_a: 0,
@@ -137,7 +147,7 @@ impl CPU {
     }
 
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
-      let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
+        let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
         match mode {
             AddressingMode::Implied => {
                 panic!("AddressingMode::Implied");
@@ -151,7 +161,7 @@ impl CPU {
             // LDA $44 => a5 44
             AddressingMode::ZeroPage => {
               let addr = self.mem_read(pc);
-              addr
+              addr as u32
             },
 
             // LDA $4400 => ad 00 44
@@ -160,70 +170,73 @@ impl CPU {
             // LDA $44,X => b5 44
             AddressingMode::ZeroPage_X => {
                 let pos = self.mem_read(pc);
-                let addr = pos.wrapping_add(self.register_x) as u16;
-                addr
+                let addr = pos.wrapping_add(self.register_x as u8) as u16;
+                addr as u32
             }
 
             // LDX $44,Y => b6 44
             AddressingMode::ZeroPage_Y => {
                 let pos = self.mem_read(pc);
-                let addr = pos.wrapping_add(self.register_y) as u16;
-                addr
+                let addr = pos.wrapping_add(self.register_y as u8) as u16;
+                addr as u32
             }
 
             // LDA $4400,X => bd 00 44
-            AddressingMode::Absolute_X => {
+            AddressingMode::Absolute_Indexed_by_X => {
                 let base = self.mem_read_u16(pc);
                 let addr = base.wrapping_add(self.register_x as u16);
                 // (+1 if page crossed)
                 if base & 0xFF00 != addr & 0xFF00 {
                     self.add_cycles += 1;
                 }
-                addr
+                addr as u32
             }
 
             // LDA $4400,Y => b9 00 44
-            AddressingMode::Absolute_Y => {
+            AddressingMode::Absolute_Indexed_by_Y => {
                 let base = self.mem_read_u16(pc);
                 let addr = base.wrapping_add(self.register_y as u16);
                 // (+1 if page crossed)
                 if base & 0xFF00 != addr & 0xFF00 {
                     self.add_cycles += 1;
                 }
-                addr
+                addr as u32
             }
             // JMP -> same Absolute
             AddressingMode::Indirect => {
                 let base = self.mem_read_u16(pc);
-                let addr = self.mem_read_u16(base);
-                addr
+                let addr = self.mem_read_u16(base as u32);
+                addr as u32
             }
 
             // LDA ($44,X) => a1 44
             AddressingMode::Indirect_X => {
                 let base = self.mem_read(pc);
-                let ptr: u8 = (base as u8).wrapping_add(self.register_x);
-                let addr = self.mem_read_u16(ptr as u16);
-                addr
+                let ptr: u8 = (base as u8).wrapping_add(self.register_x as u8);
+                let addr = self.mem_read_u16(ptr as u32);
+                addr as u32
             }
 
             // LDA ($44),Y => b1 44
             AddressingMode::Indirect_Y => {
                 let base = self.mem_read(pc);
-                let deref_base = self.mem_read_u16(base as u16);
+                let deref_base = self.mem_read_u16(base as u32);
                 let deref = deref_base.wrapping_add(self.register_y as u16);
                 // (+1 if page crossed)
                 if deref_base & 0xFF00 != deref & 0xFF00 {
                     self.add_cycles += 1;
                 }
-                deref
+                deref as u32
             }
+            // ↑ エミュレーションモード(8Bitモード)時のアドレッシングモード
+
+            // ↓ ネイティブモード(16Bitモード)時のアドレッシングモード
 
             // BCC *+4 => 90 04
             AddressingMode::Relative => {
                 let base = self.mem_read(pc);
                 let np = (base as i8) as i32 + pc as i32;
-                return np as u16;
+                return np as u32;
             }
 
             // LDA long => AF 12 56 34
@@ -231,18 +244,18 @@ impl CPU {
               let addr = self.mem_read_u16(pc);
               let bank = self.mem_read(pc + 2);
               (bank as u32) << 16 | addr as u32
-            },
+            }
             // LDA dp => A5 FF
             AddressingMode::Direct_Page => {
               let addr = self.mem_read(pc);
-              (self.direct_page as u32).wrapping_add(addr)
-            },
+              (self.direct_page as u32).wrapping_add(addr as u32)
+            }
             // LDA ($12) => B2 12
             AddressingMode::Direct_Page_Indirect => {
               let base: u16 = self.mem_read_u16(pc);
               let addr = self.mem_read_u16((self.direct_page as u32).wrapping_add(base as u32));
-              ((self.data_bank as u32) << 16 | addr) as u32
-            },
+              (((self.data_bank as u32) << 16) | addr as u32) as u32
+            }
             // LDA [$12] => A7 12
             AddressingMode::Direct_Page_Indirect_Long => {
               let base: u16 = self.mem_read_u16(pc);
@@ -251,48 +264,48 @@ impl CPU {
               // AA BB CC => CC:BBAA
               let addr = self.mem_read_u16(base);
               let bank = self.mem_read(base + 2);
-              (bank as u32) << 16 | addr as u32
-            },
+              ((bank as u32) << 16) | addr as u32
+            }
             // LDA dp, X => B5 dp
             AddressingMode::Direct_Page_Indexed_by_X => {
               let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr) as u32;
+              let addr = (self.direct_page as u32).wrapping_add(addr as u32) as u32;
               addr.wrapping_add(self.register_x as u32)
-            },
+            }
             // TODO LDAには無いアドレッシングモード
             AddressingMode::Direct_Page_Indexed_by_Y => {
               let addr = self.mem_read(pc);
-              let addr = self.direct_page.wrapping_add(addr) as u32;
+              let addr = self.direct_page.wrapping_add(addr as u16) as u32;
               addr.wrapping_add(self.register_y as u32)
-            },
+            }
             // LDA (dp, X) => A1 dp
             AddressingMode::Direct_Page_Indexed_Indirect_by_X => {
               let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr);
+              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr.wrapping_add(self.register_x as u32);
               let addr = self.mem_read_u16(addr);
               (self.data_bank as u32) << 16 | addr as u32
-            },
+            }
             // LDA (dp), Y => B1 dp
             AddressingMode::Direct_Page_Indirect_Indexed_by_Y => {
               let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr);
+              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = self.mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.register_y as u32);
               (self.data_bank as u32) << 16 | addr as u32
-            },
+            }
             AddressingMode::Absolute_Long_Indexed_by_X => {
               todo!("Absolute_Long_Indexed_X")
-            },
+            }
             AddressingMode::Direct_Page_Indirect_Long_Indexed_Y => {
               todo!("Direct_Page_Indirect_Long_Indexed_Y")
-            },
+            }
             AddressingMode::Stack_Relative => {
               todo!("Direct_Page")
-            },
+            }
             AddressingMode::Stack_Relative_Indirect_Indexed_Y => {
               todo!("Stack_Relative_Indirect_Indexed_Y")
-            },
+            }
 
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
@@ -350,17 +363,18 @@ impl CPU {
         F: FnMut(&mut CPU),
     {
         loop {
-            if let Some(_nmi) = self.bus.poll_nmi_status() {
-                self.interrupt_nmi();
-            }
+            // if let Some(_nmi) = self.bus.poll_nmi_status() {
+            //     self.interrupt_nmi();
+            // }
 
-            if self.bus.poll_apu_irq() {
-                self.apu_irq();
-            } else if unsafe { MAPPER.is_irq() } {
-                self.apu_irq();
-            }
+            // if self.bus.poll_apu_irq() {
+            //     self.apu_irq();
+            // } else if unsafe { MAPPER.is_irq() } {
+            //     self.apu_irq();
+            // }
 
-            let opscode = self.mem_read(self.program_counter);
+            let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
+            let opscode = self.mem_read(pc);
             self.program_counter += 1;
 
             let op = CPU_OPS_CODES.get(&opscode);
@@ -386,7 +400,7 @@ impl CPU {
                         _ => {}
                     }
 
-                    self.bus.tick(op.cycles + self.add_cycles);
+                    // self.bus.tick(op.cycles + self.add_cycles);
 
                     // if program_conter_state == self.program_counter {
                     //   self.program_counter += (op.len - 1) as u16
@@ -396,7 +410,7 @@ impl CPU {
             }
         }
     }
-
+/* ファミコンの割り込み実装。
     fn interrupt_nmi(&mut self) {
         debug!("** INTERRUPT_NMI **");
         self._push_u16(self.program_counter);
@@ -419,7 +433,9 @@ impl CPU {
         self.program_counter = self.mem_read_u16(0xFFFE);
         self.status = self.status | FLAG_BREAK;
     }
+*/
 
+/*
     pub fn anc(&mut self, mode: &AddressingMode) {
         todo!("anc")
     }
@@ -637,14 +653,14 @@ impl CPU {
         self.register_x = value;
         self.update_zero_and_negative_flags(self.register_x);
     }
-
+*/
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        self.register_a = value;
+        self.register_a = value as u16;
         self.update_zero_and_negative_flags(self.register_a);
     }
-
+/*
     pub fn rts(&mut self, mode: &AddressingMode) {
         let value = self._pop_u16() + 1;
         self.program_counter = value;
@@ -1033,8 +1049,8 @@ impl CPU {
 
         self.update_zero_and_negative_flags(self.register_a)
     }
-
-    fn update_zero_and_negative_flags(&mut self, result: u8) {
+*/
+    fn update_zero_and_negative_flags(&mut self, result: u16) {
         self.status = if result == 0 {
             self.status | FLAG_ZERO
         } else {
@@ -1060,11 +1076,11 @@ pub fn trace(cpu: &mut CPU) -> String {
 
     let program_counter = cpu.program_counter - 1;
     let pc = format!("{:<04X}", program_counter);
-    let op = cpu.mem_read(program_counter);
+    let op = cpu.mem_read(program_counter as u32);
     let ops = CPU_OPS_CODES.get(&op).unwrap();
     let mut args: Vec<u8> = vec![];
     for n in 1..ops.bytes {
-        let arg = cpu.mem_read(program_counter + n);
+        let arg = cpu.mem_read(program_counter as u32 + n);
         args.push(arg);
     }
     let bin = binary(op, &args);
@@ -1139,12 +1155,12 @@ fn address(program_counter: u16, ops: &OpCode, args: &Vec<u8>) -> String {
         }
 
         // LDA $4400,X => bd 00 44
-        AddressingMode::Absolute_X => {
+        AddressingMode::Absolute_Indexed_by_X => {
             format!("${:<02X}{:<02X},X", args[1], args[0])
         }
 
         // LDA $4400,Y => b9 00 44
-        AddressingMode::Absolute_Y => {
+        AddressingMode::Absolute_Indexed_by_Y => {
             format!("${:<02X}{:<02X},Y", args[1], args[0])
         }
         // JMP
@@ -1182,7 +1198,7 @@ fn memory_access(cpu: &mut CPU, ops: &OpCode, args: &Vec<u8>) -> String {
             let hi = args[1] as u16;
             let lo = args[0] as u16;
             let addr = hi << 8 | lo;
-            let value = cpu.mem_read_u16(addr);
+            let value = cpu.mem_read_u16(addr as u32);
             return format!("= {:<04X}", value);
         }
         return format!("");
@@ -1190,53 +1206,54 @@ fn memory_access(cpu: &mut CPU, ops: &OpCode, args: &Vec<u8>) -> String {
 
     match ops.addressing_mode {
         AddressingMode::ZeroPage => {
-            let value = cpu.mem_read(args[0] as u16);
+            let value = cpu.mem_read(args[0] as u32);
             format!("= {:<02X}", value)
         }
         AddressingMode::ZeroPage_X => {
-            let addr = args[0].wrapping_add(cpu.register_x) as u16;
-            let value = cpu.mem_read(addr);
+            let addr = (args[0] as u16).wrapping_add(cpu.register_x) as u16;
+            let value = cpu.mem_read(addr as u32);
             format!("@ {:<02X} = {:<02X}", addr, value)
         }
         AddressingMode::ZeroPage_Y => {
-            let addr = args[0].wrapping_add(cpu.register_y) as u16;
-            let value = cpu.mem_read(addr);
+            let addr = (args[0] as u16).wrapping_add(cpu.register_y) as u16;
+            let value = cpu.mem_read(addr as u32);
             format!("@ {:<02X} = {:<02X}", addr, value)
         }
         AddressingMode::Absolute => {
             let hi = args[1] as u16;
             let lo = args[0] as u16;
             let addr = hi << 8 | lo;
-            let value = cpu.mem_read(addr);
+            let value = cpu.mem_read(addr as u32);
             format!("= {:<02X}", value)
         }
-        AddressingMode::Absolute_X => {
+        AddressingMode::Absolute_Indexed_by_X => {
             let hi = args[1] as u16;
             let lo = args[0] as u16;
             let base = hi << 8 | lo;
-            let addr = base.wrapping_add(cpu.register_x as u16);
+            let addr = base.wrapping_add(cpu.register_x as u16) as u32;
             let value = cpu.mem_read(addr);
             format!("@ {:<04X} = {:<02X}", addr, value)
         }
-        AddressingMode::Absolute_Y => {
+        AddressingMode::Absolute_Indexed_by_Y => {
             let hi = args[1] as u16;
             let lo = args[0] as u16;
             let base = hi << 8 | lo;
-            let addr = base.wrapping_add(cpu.register_y as u16);
+            let addr = base.wrapping_add(cpu.register_y as u16) as u32;
             let value = cpu.mem_read(addr);
             format!("@ {:<04X} = {:<02X}", addr, value)
         }
         AddressingMode::Indirect_X => {
             let base = args[0];
-            let ptr: u8 = (base as u8).wrapping_add(cpu.register_x);
-            let addr = cpu.mem_read_u16(ptr as u16);
+            // FIXME 元々の実装は、u8にすることで、上位8ビットを切っていた。
+            let ptr: u16 = (base as u16).wrapping_add(cpu.register_x);
+            let addr = cpu.mem_read_u16(ptr as u32) as u32;
             let value = cpu.mem_read(addr);
             format!("@ {:<02X} = {:<04X} = {:<02X}", ptr, addr, value)
         }
         AddressingMode::Indirect_Y => {
             let base = args[0];
-            let deref_base = cpu.mem_read_u16(base as u16);
-            let deref = deref_base.wrapping_add(cpu.register_y as u16);
+            let deref_base = cpu.mem_read_u16(base as u32);
+            let deref = deref_base.wrapping_add(cpu.register_y as u16) as u32;
             let value = cpu.mem_read(deref);
             format!("= {:<04X} @ {:<04X} = {:<02X}", deref_base, deref, value)
         }
@@ -1251,1261 +1268,4 @@ fn cpu2str(cpu: &CPU) -> String {
         "A:{:<02X} X:{:<02X} Y:{:<02X} P:{:<02X} SP:{:<02X}",
         cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.stack_pointer,
     )
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-
-    // Instruction tests
-    use super::*;
-    fn run<F>(program: Vec<u8>, f: F) -> CPU
-    where
-        F: Fn(&mut CPU),
-    {
-        let mut cpu = CPU::new();
-        cpu.load();
-        cpu.reset();
-        f(&mut cpu);
-        cpu.run();
-        cpu
-    }
-
-    fn assert_status(cpu: &CPU, flags: u8) {
-        assert_eq!(cpu.status, flags)
-    }
-
-    // LDA
-    #[test]
-    fn test_0xa9_lda_immidiate_load_data() {
-        let cpu = run(vec![0xa9, 0x05, 0x00], |_| {});
-        assert_eq!(cpu.register_a, 0x05);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_0xa9_lda_zero_flag() {
-        let cpu = run(vec![0xa9, 0x00, 0x00], |_| {});
-        assert_status(&cpu, FLAG_ZERO);
-    }
-
-    #[test]
-    fn test_0xa9_lda_negative_flag() {
-        let cpu = run(vec![0xa9, 0x80, 0x00], |_| {});
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_lda_from_memory_zero_page() {
-        let cpu = run(vec![0xa5, 0x10, 0x00], |cpu| {
-            cpu.mem_write(0x10, 0x55);
-        });
-        assert_eq!(cpu.register_a, 0x55);
-    }
-
-    #[test]
-    fn test_lda_from_memory_zero_page_x() {
-        let cpu = run(vec![0xb5, 0x10, 0x00], |cpu| {
-            cpu.mem_write(0x11, 0x56);
-            cpu.register_x = 0x01;
-        });
-        assert_eq!(cpu.register_a, 0x56);
-    }
-
-    #[test]
-    fn test_lda_from_memory_absolute() {
-        let cpu = run(vec![0xad, 0x10, 0xaa, 0x00], |cpu| {
-            cpu.mem_write(0xAA10, 0x57);
-        });
-        assert_eq!(cpu.register_a, 0x57);
-    }
-
-    #[test]
-    fn test_lda_from_memory_absolute_x() {
-        let cpu = run(vec![0xbd, 0x10, 0xaa, 0x00], |cpu| {
-            cpu.mem_write(0xAA15, 0x58);
-            cpu.register_x = 0x05;
-        });
-        assert_eq!(cpu.register_a, 0x58);
-    }
-
-    #[test]
-    fn test_lda_from_memory_absolute_y() {
-        let cpu = run(vec![0xb9, 0x10, 0xaa, 0x00], |cpu| {
-            cpu.mem_write(0xAA18, 0x59);
-            cpu.register_y = 0x08;
-        });
-        assert_eq!(cpu.register_a, 0x59);
-    }
-
-    #[test]
-    fn test_lda_from_memory_indirect_x() {
-        let cpu = run(vec![0xa1, 0x10, 0x00], |cpu| {
-            cpu.mem_write_u16(0x18, 0xFF05);
-            cpu.mem_write(0xFF05, 0x5A);
-            cpu.register_x = 0x08;
-        });
-        assert_eq!(cpu.register_a, 0x5A);
-    }
-
-    #[test]
-    fn test_lda_from_memory_indirect_y() {
-        let cpu = run(vec![0xb1, 0x10, 0x00], |cpu| {
-            cpu.mem_write_u16(0x10, 0xFF06);
-            cpu.mem_write(0xFF09, 0x5B);
-            cpu.register_y = 0x03;
-        });
-        assert_eq!(cpu.register_a, 0x5B);
-    }
-/*
-    #[test]
-    fn test_format_trace() {
-        let mut bus = Bus::new(test_rom(), move |ppu: &NesPPU| {});
-        bus.mem_write(100, 0xa2);
-        bus.mem_write(101, 0x01);
-        bus.mem_write(102, 0xca);
-        bus.mem_write(103, 0x88);
-        bus.mem_write(104, 0x00);
-
-        let mut cpu = CPU::new(bus);
-        cpu.program_counter = 0x64;
-        cpu.register_a = 1;
-        cpu.register_x = 2;
-        cpu.register_y = 3;
-
-        let mut result: Vec<String> = vec![];
-        cpu.run_with_callback(|cpu| {
-            result.push(trace(cpu));
-        });
-
-        assert_eq!(
-            "0064  A2 01     LDX #$01                        A:01 X:02 Y:03 P:24 SP:FD",
-            result[0]
-        );
-        assert_eq!(
-            "0066  CA        DEX                             A:01 X:01 Y:03 P:24 SP:FD",
-            result[1]
-        );
-        assert_eq!(
-            "0067  88        DEY                             A:01 X:00 Y:03 P:26 SP:FD",
-            result[2]
-        );
-    }
-
-    #[test]
-    fn test_format_mem_access() {
-        let mut bus = Bus::new(test_rom(), move |ppu: &NesPPU| {});
-        // ORA ($33), Y
-        bus.mem_write(100, 0x11);
-        bus.mem_write(101, 0x33);
-
-        // data
-        bus.mem_write(0x33, 0x00);
-        bus.mem_write(0x34, 0x04);
-
-        // target cell
-        bus.mem_write(0x0400, 0xAA);
-
-        let mut cpu = CPU::new(bus);
-        cpu.program_counter = 0x64;
-        cpu.register_y = 0;
-
-        let mut result: Vec<String> = vec![];
-        cpu.run_with_callback(|cpu| {
-            result.push(trace(cpu));
-        });
-        assert_eq!(
-            "0064  11 33     ORA ($33),Y = 0400 @ 0400 = AA  A:00 X:00 Y:00 P:24 SP:FD",
-            result[0]
-        );
-    }
-*/
-/*
-    #[test]
-    fn test_5_ops_working_together() {
-        let cpu = run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0xc1);
-    }
-
-    // STA
-    #[test]
-    fn test_sta_from_memory() {
-        let cpu = run(vec![0x85, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0xBA;
-        });
-        assert_eq!(cpu.mem_read(0x10), 0xBA);
-    }
-
-    // ADC
-    #[test]
-    fn test_adc_no_carry() {
-        let cpu = run(vec![0x69, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0x20;
-        });
-        assert_eq!(cpu.register_a, 0x30);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_adc_has_carry() {
-        let cpu = run(vec![0x69, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0x20;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x31);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_adc_occur_carry() {
-        let cpu = run(vec![0x69, 0x01, 0x00], |cpu| {
-            cpu.register_a = 0xFF;
-        });
-        assert_eq!(cpu.register_a, 0x00);
-        assert_status(&cpu, FLAG_CARRY | FLAG_ZERO);
-    }
-
-    #[test]
-    fn test_adc_occur_overflow_plus() {
-        let cpu = run(vec![0x69, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0x7F;
-        });
-        assert_eq!(cpu.register_a, 0x8F);
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_OVERFLOW);
-    }
-
-    #[test]
-    fn test_adc_occur_overflow_plus_with_carry() {
-        let cpu = run(vec![0x69, 0x6F, 0x00], |cpu| {
-            cpu.register_a = 0x10;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x80);
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_OVERFLOW);
-    }
-
-    #[test]
-    fn test_adc_occur_overflow_minus() {
-        let cpu = run(vec![0x69, 0x81, 0x00], |cpu| {
-            cpu.register_a = 0x81;
-        });
-        assert_eq!(cpu.register_a, 0x02);
-        assert_status(&cpu, FLAG_OVERFLOW | FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_adc_occur_overflow_minus_with_carry() {
-        let mut cpu = run(vec![0x69, 0x80, 0x00], |cpu| {
-            cpu.register_a = 0x80;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, FLAG_OVERFLOW | FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_adc_no_overflow() {
-        let cpu = run(vec![0x69, 0x7F, 0x00], |cpu| {
-            cpu.register_a = 0x82;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    // SBC
-    #[test]
-    fn test_sbc_no_carry() {
-        let cpu = run(vec![0xe9, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0x20;
-        });
-        assert_eq!(cpu.register_a, 0x0F);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_sbc_has_carry() {
-        let mut cpu = run(vec![0xe9, 0x10, 0x00], |cpu| {
-            cpu.register_a = 0x20;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x10);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_sbc_occur_carry() {
-        let cpu = run(vec![0xe9, 0x02, 0x00], |cpu| {
-            cpu.register_a = 0x01;
-        });
-        assert_eq!(cpu.register_a, 0xFE);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_sbc_occur_overflow() {
-        let cpu = run(vec![0xe9, 0x81, 0x00], |cpu| {
-            cpu.register_a = 0x7F;
-        });
-        assert_eq!(cpu.register_a, 0xFD);
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_OVERFLOW);
-    }
-
-    #[test]
-    fn test_sbc_occur_overflow_with_carry() {
-        let cpu = run(vec![0xe9, 0x81, 0x00], |cpu| {
-            cpu.register_a = 0x7F;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0xFE);
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_OVERFLOW);
-    }
-
-    #[test]
-    fn test_sbc_no_overflow() {
-        let cpu = run(vec![0xe9, 0x7F, 0x00], |cpu| {
-            cpu.register_a = 0x7E;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0xFF);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // AND
-    #[test]
-    fn test_and() {
-        let cpu = run(vec![0x29, 0x0C, 0x00], |cpu| {
-            cpu.register_a = 0x0A;
-        });
-        assert_eq!(cpu.register_a, 0x08);
-        assert_status(&cpu, 0);
-    }
-
-    // EOR
-    #[test]
-    fn test_eor() {
-        let cpu = run(vec![0x49, 0x0C, 0x00], |cpu| {
-            cpu.register_a = 0x0A;
-        });
-        assert_eq!(cpu.register_a, 0x06);
-        assert_status(&cpu, 0);
-    }
-
-    // ORA
-    #[test]
-    fn test_ora() {
-        let cpu = run(vec![0x09, 0x0C, 0x00], |cpu| {
-            cpu.register_a = 0x0A;
-        });
-        assert_eq!(cpu.register_a, 0x0E);
-        assert_status(&cpu, 0);
-    }
-
-    // ASL
-    #[test]
-    fn test_asl_a() {
-        let cpu = run(vec![0x0A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-        });
-        assert_eq!(cpu.register_a, 0x03 * 2);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_asl_zero_page() {
-        let cpu = run(vec![0x06, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x03 * 2);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_asl_a_occur_carry() {
-        let cpu = run(vec![0x0A, 0x00], |cpu| {
-            cpu.register_a = 0x81;
-        });
-        assert_eq!(cpu.register_a, 0x02);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_asl_zero_page_occur_carry() {
-        let cpu = run(vec![0x06, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x81);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x02);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    // LSR
-    #[test]
-    fn test_lsr_a() {
-        let cpu = run(vec![0x4A, 0x00], |cpu| {
-            cpu.register_a = 0x02;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_lsr_zero_page() {
-        let cpu = run(vec![0x46, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x02);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_lsr_zero_page_zero_flag() {
-        let cpu = run(vec![0x46, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x01);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x00);
-        assert_status(&cpu, FLAG_ZERO | FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_lsr_a_occur_carry() {
-        let cpu = run(vec![0x4A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_lsr_zero_page_occur_carry() {
-        let cpu = run(vec![0x46, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    // ROL
-    #[test]
-    fn test_rol_a() {
-        let cpu = run(vec![0x2A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-        });
-        assert_eq!(cpu.register_a, 0x03 * 2);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_rol_zero_page() {
-        let cpu = run(vec![0x26, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x03 * 2);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_rol_a_with_carry() {
-        let cpu = run(vec![0x2A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x03 * 2 + 1);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_rol_zero_page_with_carry() {
-        let cpu = run(vec![0x26, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x03 * 2 + 1);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_rol_a_zero_with_carry() {
-        let cpu = run(vec![0x2A, 0x00], |cpu| {
-            cpu.register_a = 0x00;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_rol_zero_page_zero_with_carry() {
-        let cpu = run(vec![0x26, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x00);
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    // ROR
-    #[test]
-    fn test_ror_a() {
-        let cpu = run(vec![0x6A, 0x00], |cpu| {
-            cpu.register_a = 0x02;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_ror_zero_page() {
-        let cpu = run(vec![0x66, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x02);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x01);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_ror_a_occur_carry() {
-        let cpu = run(vec![0x6A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-        });
-        assert_eq!(cpu.register_a, 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_ror_zero_page_occur_carry() {
-        let cpu = run(vec![0x66, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_ror_a_with_carry() {
-        let cpu = run(vec![0x6A, 0x00], |cpu| {
-            cpu.register_a = 0x03;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x81);
-        assert_status(&cpu, FLAG_CARRY | FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_ror_zero_page_with_carry() {
-        let cpu = run(vec![0x66, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x03);
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x81);
-        assert_status(&cpu, FLAG_CARRY | FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_ror_a_zero_with_carry() {
-        let cpu = run(vec![0x6A, 0x00], |cpu| {
-            cpu.register_a = 0x00;
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0x80);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_ror_zero_page_zero_with_carry() {
-        let cpu = run(vec![0x66, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x00);
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x80);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // BCC
-    #[test]
-    fn test_bcc() {
-        let cpu = run(vec![0x90, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    #[test]
-    fn test_bcc_with_carry() {
-        let cpu = run(vec![0x90, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, FLAG_CARRY);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    #[test]
-    fn test_bcc_negative() {
-        let cpu = run(vec![0x90, 0xfc, 0x00], |cpu| {
-            cpu.mem_write(0x7FFF, 0x00);
-            cpu.mem_write(0x7FFE, 0xe8);
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8000)
-    }
-
-    // BCS
-    #[test]
-    fn test_bcs() {
-        let cpu = run(vec![0xb0, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    #[test]
-    fn test_bcs_with_carry() {
-        let cpu = run(vec![0xb0, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    #[test]
-    fn test_bcs_negative() {
-        let cpu = run(vec![0xb0, 0xfc, 0x00], |cpu| {
-            cpu.mem_write(0x7FFF, 0x00);
-            cpu.mem_write(0x7FFE, 0xe8);
-            cpu.status = FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, FLAG_CARRY);
-        assert_eq!(cpu.program_counter, 0x8000)
-    }
-
-    // BEQ
-    #[test]
-    fn test_beq() {
-        let cpu = run(vec![0xF0, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {});
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    #[test]
-    fn test_beq_with_zero_flag() {
-        let cpu = run(vec![0xF0, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_ZERO;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0); // ZEROはINXで落ちる
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    // BNE
-    #[test]
-    fn test_bne() {
-        let cpu = run(vec![0xD0, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    #[test]
-    fn test_bne_with_zero_flag() {
-        let cpu = run(vec![0xD0, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_ZERO;
-        });
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, FLAG_ZERO);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    // BIT
-    #[test]
-    fn test_bit() {
-        let cpu = run(vec![0x24, 0x00, 0x00], |cpu| {
-            cpu.register_a = 0x00;
-            cpu.mem_write(0x0000, 0x00);
-        });
-        assert_status(&cpu, FLAG_ZERO);
-    }
-
-    #[test]
-    fn test_bit_negative_flag() {
-        let cpu = run(vec![0x24, 0x00, 0x00], |cpu| {
-            cpu.register_a = 0x00;
-            cpu.mem_write(0x0000, 0x80);
-        });
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_ZERO);
-    }
-
-    #[test]
-    fn test_bit_overflow_flag() {
-        let cpu = run(vec![0x24, 0x00, 0x00], |cpu| {
-            cpu.register_a = 0x40;
-            cpu.mem_write(0x0000, 0x40);
-        });
-        assert_status(&cpu, FLAG_OVERFLOW);
-    }
-
-    // BMI
-    #[test]
-    fn test_bmi() {
-        let cpu = run(vec![0x30, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    #[test]
-    fn test_bmi_with_negative_flag() {
-        let cpu = run(vec![0x30, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0); //INXしてるからnegativeが落ちる
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    // BPL
-    #[test]
-    fn test_bpl() {
-        let cpu = run(vec![0x10, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    #[test]
-    fn test_bpl_with_negative_flag() {
-        let cpu = run(vec![0x10, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE;
-        });
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, FLAG_NEGATIVE);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    // BVC
-    #[test]
-    fn test_bvc() {
-        let cpu = run(vec![0x50, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    #[test]
-    fn test_bvc_with_overflow_flag() {
-        let cpu = run(vec![0x50, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_OVERFLOW;
-        });
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, FLAG_OVERFLOW);
-        assert_eq!(cpu.program_counter, 0x8003)
-    }
-
-    // BVS
-    #[test]
-    fn test_bvs() {
-        let cpu = run(vec![0x70, 0x02, 0x00, 0x00, 0xe8, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8003);
-    }
-
-    #[test]
-    fn test_bvs_with_overflow_flag() {
-        let cpu = run(vec![0x70, 0x02, 0x00, 0x00, 0xe8, 0x00], |cpu| {
-            cpu.status = FLAG_OVERFLOW;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, FLAG_OVERFLOW);
-        assert_eq!(cpu.program_counter, 0x8006)
-    }
-
-    // CLC
-    #[test]
-    fn test_clc() {
-        let cpu = run(vec![0x18, 0x00], |cpu| {
-            cpu.status = FLAG_CARRY | FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // SEC
-    #[test]
-    fn test_sec() {
-        let cpu = run(vec![0x38, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_CARRY | FLAG_NEGATIVE);
-    }
-
-    // CLD
-    #[test]
-    fn test_cld() {
-        let cpu = run(vec![0xd8, 0x00], |cpu| {
-            cpu.status = FLAG_DECIMAL | FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // SED
-    #[test]
-    fn test_sed() {
-        let cpu = run(vec![0xf8, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_DECIMAL | FLAG_NEGATIVE);
-    }
-
-    // CLI
-    #[test]
-    fn test_cli() {
-        let cpu = run(vec![0x58, 0x00], |cpu| {
-            cpu.status = FLAG_INTERRRUPT | FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // SEI
-    #[test]
-    fn test_sei() {
-        let cpu = run(vec![0x78, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_INTERRRUPT | FLAG_NEGATIVE);
-    }
-
-    // CLV
-    #[test]
-    fn test_clv() {
-        let cpu = run(vec![0xb8, 0x00], |cpu| {
-            cpu.status = FLAG_OVERFLOW | FLAG_NEGATIVE;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // CMP
-    #[test]
-    fn test_cmp() {
-        let cpu = run(vec![0xC9, 0x01, 0x00], |cpu| {
-            cpu.register_a = 0x02;
-        });
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    #[test]
-    fn test_cmp_eq() {
-        let cpu = run(vec![0xC9, 0x02, 0x00], |cpu| {
-            cpu.register_a = 0x02;
-        });
-        assert_status(&cpu, FLAG_CARRY | FLAG_ZERO);
-    }
-
-    #[test]
-    fn test_cmp_negative() {
-        let cpu = run(vec![0xC9, 0x03, 0x00], |cpu| {
-            cpu.register_a = 0x02;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // CPX
-    #[test]
-    fn test_cpx() {
-        let cpu = run(vec![0xe0, 0x01, 0x00], |cpu| {
-            cpu.register_x = 0x02;
-        });
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    // CPY
-    #[test]
-    fn test_cpy() {
-        let cpu = run(vec![0xc0, 0x01, 0x00], |cpu| {
-            cpu.register_y = 0x02;
-        });
-        assert_status(&cpu, FLAG_CARRY);
-    }
-
-    // DEC
-    #[test]
-    fn test_dec() {
-        let cpu = run(vec![0xc6, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x05);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x04);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_dec_overflow() {
-        let cpu = run(vec![0xc6, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x00);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0xFF);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // DEX
-    #[test]
-    fn test_dex() {
-        let cpu = run(vec![0xca, 0x00], |cpu| {
-            cpu.register_x = 0x05;
-        });
-        assert_eq!(cpu.register_x, 0x04);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_dex_overflow() {
-        let cpu = run(vec![0xca, 0x00], |cpu| {
-            cpu.register_x = 0x00;
-        });
-        assert_eq!(cpu.register_x, 0xFF);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // DEY
-    #[test]
-    fn test_dey() {
-        let cpu = run(vec![0x88, 0x00], |cpu| {
-            cpu.register_y = 0x05;
-        });
-        assert_eq!(cpu.register_y, 0x04);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_dey_overflow() {
-        let cpu = run(vec![0x88, 0x00], |cpu| {
-            cpu.register_y = 0x00;
-        });
-        assert_eq!(cpu.register_y, 0xFF);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    // INC
-    #[test]
-    fn test_inc() {
-        let cpu = run(vec![0xe6, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0x05);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x06);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_inc_overflow() {
-        let cpu = run(vec![0xe6, 0x01, 0x00], |cpu| {
-            cpu.mem_write(0x0001, 0xFF);
-        });
-        assert_eq!(cpu.mem_read(0x0001), 0x00);
-        assert_status(&cpu, FLAG_ZERO);
-    }
-
-    // INX
-    #[test]
-    fn test_inx() {
-        let cpu = run(vec![0xe8, 0x00], |cpu| {
-            cpu.register_x = 0x05;
-        });
-        assert_eq!(cpu.register_x, 0x06);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_inx_overflow() {
-        let cpu = run(vec![0xe8, 0x00], |cpu| {
-            cpu.register_x = 0xFF;
-        });
-        assert_eq!(cpu.register_x, 0x00);
-        assert_status(&cpu, FLAG_ZERO);
-    }
-
-    // INY
-    #[test]
-    fn test_iny() {
-        let cpu = run(vec![0xc8, 0x00], |cpu| {
-            cpu.register_y = 0x05;
-        });
-        assert_eq!(cpu.register_y, 0x06);
-        assert_status(&cpu, 0);
-    }
-
-    #[test]
-    fn test_iny_overflow() {
-        let cpu = run(vec![0xc8, 0x00], |cpu| {
-            cpu.register_y = 0xFF;
-        });
-        assert_eq!(cpu.register_y, 0x00);
-        assert_status(&cpu, FLAG_ZERO);
-    }
-
-    // JMP
-    #[test]
-    fn test_jmp() {
-        let cpu = run(vec![0x4c, 0x30, 0x40, 0x00], |cpu| {
-            cpu.mem_write(0x4030, 0xe8);
-            cpu.mem_write(0x4031, 0x00);
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x4032);
-    }
-
-    #[test]
-    fn test_jmp_indirect() {
-        let cpu = run(vec![0x6c, 0x30, 0x40, 0x00], |cpu| {
-            cpu.mem_write(0x4030, 0x01);
-            cpu.mem_write(0x4031, 0x02);
-
-            cpu.mem_write(0x0201, 0xe8);
-            cpu.mem_write(0x0202, 0x00);
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x0203);
-    }
-
-    // JSR
-    #[test]
-    fn test_jsr() {
-        let cpu = run(vec![0x20, 0x30, 0x40, 0x00], |cpu| {
-            cpu.mem_write(0x4030, 0xe8);
-            cpu.mem_write(0x4031, 0x00);
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x4032);
-        assert_eq!(cpu.stack_pointer, 0xFD);
-        assert_eq!(cpu.mem_read_u16(0x01FE), 0x8003);
-    }
-
-    // RTS
-    #[test]
-    fn test_rts() {
-        let cpu = run(vec![0x60, 0x00], |cpu| {
-            cpu.mem_write(0x01FF, 0x05);
-            cpu.mem_write(0x01FE, 0x06);
-
-            cpu.mem_write(0x0506, 0xe8);
-            cpu.mem_write(0x0507, 0x00);
-
-            cpu.stack_pointer = 0xFD;
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x0508);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-        // 書き潰されない前提
-        assert_eq!(cpu.mem_read_u16(0x01FE), 0x0506);
-    }
-
-    // JSR & RTS
-    #[test]
-    fn test_jsr_and_rts() {
-        let cpu = run(vec![0x20, 0x30, 0x40, 0x00], |cpu| {
-            cpu.mem_write(0x4030, 0xe8);
-            cpu.mem_write(0x4031, 0x60); // RTS
-            cpu.mem_write(0x4032, 0x00);
-        });
-        assert_eq!(cpu.register_x, 0x01);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.program_counter, 0x8004);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-        // 書き潰されない前提
-        assert_eq!(cpu.mem_read_u16(0x01FE), 0x8003);
-    }
-
-    // LDX
-    #[test]
-    fn test_ldx() {
-        let cpu = run(vec![0xa2, 0x05, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0x05);
-        assert_status(&cpu, 0);
-    }
-
-    // LDY
-    #[test]
-    fn test_ldy() {
-        let cpu = run(vec![0xa0, 0x05, 0x00], |_| {});
-        assert_eq!(cpu.register_y, 0x05);
-        assert_status(&cpu, 0);
-    }
-
-    // NOP
-    #[test]
-    fn test_nop() {
-        let cpu = run(vec![0xea, 0x00], |_| {});
-        assert_eq!(cpu.program_counter, 0x8002);
-        assert_status(&cpu, 0);
-    }
-
-    // PHA
-    #[test]
-    fn test_pha() {
-        let cpu = run(vec![0x48, 0x00], |cpu| {
-            cpu.register_a = 0x07;
-        });
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.register_a, 0x07);
-        assert_eq!(cpu.stack_pointer, 0xFE);
-        assert_eq!(cpu.mem_read(0x01FF), 0x07);
-    }
-
-    // PLA
-    #[test]
-    fn test_pla() {
-        let cpu = run(vec![0x68, 0x00], |cpu| {
-            cpu.mem_write(0x01FF, 0x07);
-            cpu.stack_pointer = 0xFE;
-        });
-        assert_eq!(cpu.register_a, 0x07);
-        assert_status(&cpu, 0);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-    }
-
-    #[test]
-    fn test_pla_zero() {
-        let cpu = run(vec![0x68, 0x00], |cpu| {
-            cpu.mem_write(0x01FF, 0x00);
-            cpu.stack_pointer = 0xFE;
-        });
-        assert_eq!(cpu.register_a, 0x00);
-        assert_status(&cpu, FLAG_ZERO);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-    }
-
-    // PHA & PLA
-    #[test]
-    fn test_pla_and_pla() {
-        let cpu = run(vec![0x48, 0xa9, 0x60, 0x68, 0x00], |cpu| {
-            cpu.register_a = 0x80;
-        });
-        assert_eq!(cpu.register_a, 0x80);
-        assert_status(&cpu, FLAG_NEGATIVE);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-        assert_eq!(cpu.program_counter, 0x8005);
-    }
-
-    // PHP
-    #[test]
-    fn test_php() {
-        let cpu = run(vec![0x08, 0x00], |cpu| {
-            cpu.status = FLAG_NEGATIVE | FLAG_OVERFLOW;
-        });
-        assert_status(&cpu, FLAG_NEGATIVE | FLAG_OVERFLOW);
-        assert_eq!(cpu.stack_pointer, 0xFE);
-        assert_eq!(cpu.mem_read(0x01FF), FLAG_NEGATIVE | FLAG_OVERFLOW);
-    }
-
-    // PLP
-    #[test]
-    fn test_plp() {
-        let cpu = run(vec![0x28, 0x00], |cpu| {
-            cpu.mem_write(0x01FF, FLAG_CARRY | FLAG_ZERO);
-            cpu.stack_pointer = 0xFE;
-        });
-        assert_status(&cpu, FLAG_CARRY | FLAG_ZERO);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-    }
-
-    // PHP & PLP
-    #[test]
-    fn test_plp_and_plp() {
-        let cpu = run(vec![0x08, 0xa9, 0xF0, 0x28, 0x00], |cpu| {
-            cpu.status = FLAG_OVERFLOW | FLAG_CARRY;
-        });
-        assert_eq!(cpu.register_a, 0xF0);
-        assert_status(&cpu, FLAG_OVERFLOW | FLAG_CARRY);
-        assert_eq!(cpu.stack_pointer, 0xFF);
-        assert_eq!(cpu.program_counter, 0x8005);
-    }
-
-    // FIXME RTIのテストは一旦保留
-    // BRKの逆をやるのだが、BRKでpushしてないぽいので。
-
-    // STX
-    #[test]
-    fn test_stx() {
-        let cpu = run(vec![0x86, 0x10, 0x00], |cpu| {
-            cpu.register_x = 0xBA;
-        });
-        assert_eq!(cpu.mem_read(0x10), 0xBA);
-    }
-
-    // STY
-    #[test]
-    fn test_sty() {
-        let cpu = run(vec![0x84, 0x10, 0x00], |cpu| {
-            cpu.register_y = 0xBA;
-        });
-        assert_eq!(cpu.mem_read(0x10), 0xBA);
-    }
-
-    // TAX
-    #[test]
-    fn test_0xaa_tax_move_a_to_x() {
-        let cpu = run(vec![0xaa, 0x00], |cpu| {
-            cpu.register_a = 10;
-        });
-        assert_eq!(cpu.register_x, 10);
-    }
-
-    // TXA
-    #[test]
-    fn test_txa() {
-        let cpu = run(vec![0x8a, 0x00], |cpu| {
-            cpu.register_x = 0x10;
-        });
-        assert_eq!(cpu.register_a, 0x10);
-    }
-
-    // TAY
-    #[test]
-    fn test_tay() {
-        let cpu = run(vec![0xa8, 0x00], |cpu| {
-            cpu.register_a = 0x10;
-        });
-        assert_eq!(cpu.register_y, 0x10);
-    }
-
-    // TYA
-    #[test]
-    fn test_tya() {
-        let cpu = run(vec![0x98, 0x00], |cpu| {
-            cpu.register_y = 0x10;
-        });
-        assert_eq!(cpu.register_a, 0x10);
-    }
-
-    // TSX
-    #[test]
-    fn test_tsx() {
-        let cpu = run(vec![0xba, 0x00], |_| {});
-        assert_eq!(cpu.register_x, 0xFF);
-        assert_status(&cpu, FLAG_NEGATIVE);
-    }
-
-    #[test]
-    fn test_tsx_some_value() {
-        let cpu = run(vec![0xba, 0x00], |cpu| {
-            cpu.stack_pointer = 0x75;
-        });
-        assert_eq!(cpu.register_x, 0x75);
-        assert_status(&cpu, 0);
-    }
-
-    // TXS
-    #[test]
-    fn test_txs() {
-        let cpu = run(vec![0x9a, 0x00], |cpu| {
-            cpu.register_x = 0x80;
-        });
-        assert_eq!(cpu.stack_pointer, 0x80);
-        assert_status(&cpu, 0);
-    }
-    */
 }
