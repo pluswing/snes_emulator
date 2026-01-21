@@ -97,9 +97,9 @@ pub struct CPU {
     pub status: u8,
     pub direct_page: u16, // ダイレクトページレジスタ (D)
     pub data_bank: u8, // データバンクレジスタ (DBR)
-    pub prgram_bank: u8, // プログラムバンクレジスタ (PBR)
+    pub program_bank: u8, // プログラムバンクレジスタ (PBR)
     pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
-    pub memory: [u8; 0x100_0000], // 0xFFFFFF
+    pub memory: Vec<u8>, // size=0xFFFFFF
     // pub bus: Bus<'a>,
 
     add_cycles: u8,
@@ -121,11 +121,11 @@ impl Mem for CPU {
 impl CPU {
 
     // for TEST
-    fn mem_read(&mut self, addr: u32) -> u8 {
-        self.memory[addr]
+    pub fn mem_read(&mut self, addr: u32) -> u8 {
+        self.memory[addr as usize]
     }
-    fn mem_write(&mut self, addr: u32, data: u8) {
-        self.memory[addr] = data;
+    pub fn mem_write(&mut self, addr: u32, data: u8) {
+        self.memory[addr as usize] = data;
     }
 
     pub fn new() -> Self {
@@ -138,16 +138,20 @@ impl CPU {
             stack_pointer: 0xFD,
             direct_page: 0,
             data_bank: 0,
-            prgram_bank: 0,
+            program_bank: 0,
             mode: MODE_16BIT,
-            memory: [0x00; 0x100_0000],
+            memory: vec![0; 0x100_0000],
             // bus: bus,
             add_cycles: 0,
         }
     }
 
+    pub fn pc(&self) -> u32 {
+      (self.program_bank as u32) << 16 | self.program_counter as u32
+    }
+
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
-        let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
+        let pc = self.pc();
         match mode {
             AddressingMode::Implied => {
                 panic!("AddressingMode::Implied");
@@ -165,7 +169,7 @@ impl CPU {
             },
 
             // LDA $4400 => ad 00 44
-            AddressingMode::Absolute => self.mem_read_u16(pc),
+            AddressingMode::Absolute => self.mem_read_u16(pc) as u32,
 
             // LDA $44,X => b5 44
             AddressingMode::ZeroPage_X => {
@@ -295,16 +299,16 @@ impl CPU {
               (self.data_bank as u32) << 16 | addr as u32
             }
             AddressingMode::Absolute_Long_Indexed_by_X => {
-              todo!("Absolute_Long_Indexed_X")
+              todo!("Absolute_Long_Indexed_by_X")
             }
-            AddressingMode::Direct_Page_Indirect_Long_Indexed_Y => {
-              todo!("Direct_Page_Indirect_Long_Indexed_Y")
+            AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
+              todo!("Direct_Page_Indirect_Long_Indexed_by_Y")
             }
             AddressingMode::Stack_Relative => {
               todo!("Direct_Page")
             }
-            AddressingMode::Stack_Relative_Indirect_Indexed_Y => {
-              todo!("Stack_Relative_Indirect_Indexed_Y")
+            AddressingMode::Stack_Relative_Indirect_Indexed_by_Y => {
+              todo!("Stack_Relative_Indirect_Indexed_by_Y")
             }
 
             AddressingMode::NoneAddressing => {
@@ -355,59 +359,49 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
-        self.run_with_callback(|_| {});
-    }
+        // if let Some(_nmi) = self.bus.poll_nmi_status() {
+        //     self.interrupt_nmi();
+        // }
 
-    pub fn run_with_callback<F>(&mut self, mut callback: F)
-    where
-        F: FnMut(&mut CPU),
-    {
-        loop {
-            // if let Some(_nmi) = self.bus.poll_nmi_status() {
-            //     self.interrupt_nmi();
-            // }
+        // if self.bus.poll_apu_irq() {
+        //     self.apu_irq();
+        // } else if unsafe { MAPPER.is_irq() } {
+        //     self.apu_irq();
+        // }
 
-            // if self.bus.poll_apu_irq() {
-            //     self.apu_irq();
-            // } else if unsafe { MAPPER.is_irq() } {
-            //     self.apu_irq();
-            // }
+        let pc = (self.program_bank as u32) << 16 | self.program_counter as u32;
+        let opscode = self.mem_read(pc);
+        self.program_counter += 1;
 
-            let pc = (self.prgram_bank as u32) << 16 | self.program_counter as u32;
-            let opscode = self.mem_read(pc);
-            self.program_counter += 1;
+        let op = CPU_OPS_CODES.get(&opscode);
+        match op {
+            Some(op) => {
+                self.add_cycles = 0;
 
-            let op = CPU_OPS_CODES.get(&opscode);
-            match op {
-                Some(op) => {
-                    self.add_cycles = 0;
+                call(self, &op);
 
-                    callback(self);
-                    call(self, &op);
-
-                    match op.cycle_calc_mode {
-                        CycleCalcMode::None => {
-                            self.add_cycles = 0;
-                        }
-                        CycleCalcMode::Page => {
-                            if self.add_cycles > 1 {
-                                panic!(
-                                    "Unexpected cycle_calc. {} {:?} => {}",
-                                    op.name, op.addressing_mode, self.add_cycles
-                                )
-                            }
-                        }
-                        _ => {}
+                match op.cycle_calc_mode {
+                    CycleCalcMode::None => {
+                        self.add_cycles = 0;
                     }
-
-                    // self.bus.tick(op.cycles + self.add_cycles);
-
-                    // if program_conter_state == self.program_counter {
-                    //   self.program_counter += (op.len - 1) as u16
-                    // }
+                    CycleCalcMode::Page => {
+                        if self.add_cycles > 1 {
+                            panic!(
+                                "Unexpected cycle_calc. {} {:?} => {}",
+                                op.name, op.addressing_mode, self.add_cycles
+                            )
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {} // panic!("no implementation {:<02X}", opscode),
+
+                // self.bus.tick(op.cycles + self.add_cycles);
+
+                // if program_conter_state == self.program_counter {
+                //   self.program_counter += (op.len - 1) as u16
+                // }
             }
+            _ => {} // panic!("no implementation {:<02X}", opscode),
         }
     }
 /* ファミコンの割り込み実装。
@@ -1065,6 +1059,7 @@ impl CPU {
     }
 }
 
+/*
 pub fn trace(cpu: &mut CPU) -> String {
     // 0064  A2 01     LDX #$01                        A:01 X:02 Y:03 P:24 SP:FD
     // OK 0064 => program_counter
@@ -1080,7 +1075,7 @@ pub fn trace(cpu: &mut CPU) -> String {
     let ops = CPU_OPS_CODES.get(&op).unwrap();
     let mut args: Vec<u8> = vec![];
     for n in 1..ops.bytes {
-        let arg = cpu.mem_read(program_counter as u32 + n);
+        let arg = cpu.mem_read(program_counter as u32 + n as u32);
         args.push(arg);
     }
     let bin = binary(op, &args);
@@ -1269,3 +1264,4 @@ fn cpu2str(cpu: &CPU) -> String {
         cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.stack_pointer,
     )
 }
+*/

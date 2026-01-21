@@ -268,7 +268,7 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
 
 pub fn call(cpu: &mut CPU, op: &OpCode) {
   match op.name.replace("*", "").as_str() {
-
+/*
     "ADC" => {
       cpu.adc(&op.addressing_mode);
       cpu.program_counter += op.bytes - 1
@@ -413,12 +413,12 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
       cpu.jsr(&op.addressing_mode);
       cpu.program_counter += op.bytes - 1
     }
-
+*/
     "LDA" => {
       cpu.lda(&op.addressing_mode);
       cpu.program_counter += op.bytes - 1
     }
-
+/*
     "LDX" => {
       cpu.ldx(&op.addressing_mode);
       cpu.program_counter += op.bytes - 1
@@ -648,7 +648,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
       cpu.shs(&op.addressing_mode);
       cpu.program_counter += op.bytes - 1
     }
-
+ */
     _ => {
         todo!()
     }
