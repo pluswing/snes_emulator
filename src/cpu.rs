@@ -150,6 +150,43 @@ impl CPU {
       (self.program_bank as u32) << 16 | self.program_counter as u32
     }
 
+    pub fn is_native_mode(&self) -> bool {
+      self.mode == MODE_16BIT
+    }
+
+    pub fn is_emulation_mode(&self) -> bool {
+      !self.is_native_mode()
+    }
+
+    pub fn set_stack_pointer(&mut self, value: u16) {
+      self.stack_pointer = value;
+    }
+
+    pub fn get_stack_pointer(&mut self) -> u16 {
+      if self.is_native_mode() {
+        self.stack_pointer
+      } else {
+         0x0100 | (self.stack_pointer & 0x00FF)
+      }
+    }
+
+    pub fn set_register_a(&mut self, value: u16) {
+      if self.is_native_mode() {
+        self.register_a = value;
+      } else {
+        self.register_a = (self.register_a & 0xFF00) | (value & 0x00FF)
+      }
+    }
+
+    pub fn get_register_a(&mut self) -> u16 {
+      if self.is_native_mode() {
+        self.register_a
+      } else {
+        self.register_a & 0x00FF
+      }
+    }
+
+
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         let pc = self.pc();
         match mode {
@@ -349,7 +386,7 @@ impl CPU {
         self.register_y = 0;
         // FIXME あってる？
         self.status = FLAG_INTERRRUPT | FLAG_BREAK2;
-        self.stack_pointer = 0xFD;
+        self.set_stack_pointer(0xFD);
 
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -651,8 +688,9 @@ impl CPU {
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        self.register_a = value as u16;
-        self.update_zero_and_negative_flags(self.register_a);
+        self.set_register_a(value as u16);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
     }
 /*
     pub fn rts(&mut self, mode: &AddressingMode) {

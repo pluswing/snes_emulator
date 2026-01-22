@@ -76,7 +76,7 @@ struct TestCaseData {
 fn main() {
     println!("CPU TEST!");
     // TODO a9.n を実行時引数でもらう。
-    let target = "tests/cases/a9.n.json";
+    let target = "tests/cases/a9.e.json";
 
     let input_fn = fs::read_to_string(target).expect("JSON Read Failed.");
     let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
@@ -104,10 +104,11 @@ fn main() {
       let opcode = cpu.mem_read(cpu.pc());
       println!("OP: {:02X}", opcode);
       cpu.run();
+      // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
 
       // cpuの状態とFinalが合っているか確認
       assert_eq!(cpu.program_counter, data.Final.Pc);
-      assert_eq!(cpu.stack_pointer, data.Final.S);
+      assert_eq!(cpu.get_stack_pointer(), data.Final.S);
       assert_eq!(cpu.status, data.Final.P);
       assert_eq!(cpu.register_a, data.Final.A);
       assert_eq!(cpu.register_x, data.Final.X);
