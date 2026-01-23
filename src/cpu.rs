@@ -158,21 +158,9 @@ impl CPU {
       !self.is_native_mode()
     }
 
-    pub fn set_stack_pointer(&mut self, value: u16) {
-      self.stack_pointer = value;
-    }
-
-    pub fn get_stack_pointer(&mut self) -> u16 {
-      if self.is_native_mode() {
-        self.stack_pointer
-      } else {
-         0x0100 | (self.stack_pointer & 0x00FF)
-      }
-    }
-
     pub fn set_register_a(&mut self, value: u16) {
       if self.is_native_mode() {
-        self.register_a = value;
+        self.register_a = value
       } else {
         self.register_a = (self.register_a & 0xFF00) | (value & 0x00FF)
       }
@@ -185,7 +173,6 @@ impl CPU {
         self.register_a & 0x00FF
       }
     }
-
 
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         let pc = self.pc();
@@ -206,7 +193,10 @@ impl CPU {
             },
 
             // LDA $4400 => ad 00 44
-            AddressingMode::Absolute => self.mem_read_u16(pc) as u32,
+            AddressingMode::Absolute => {
+              let addr = self.mem_read_u16(pc) as u32;
+              ((self.data_bank as u32) << 16) | addr
+            }
 
             // LDA $44,X => b5 44
             AddressingMode::ZeroPage_X => {
@@ -386,7 +376,7 @@ impl CPU {
         self.register_y = 0;
         // FIXME あってる？
         self.status = FLAG_INTERRRUPT | FLAG_BREAK2;
-        self.set_stack_pointer(0xFD);
+        self.stack_pointer = 0xFD;
 
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -395,7 +385,14 @@ impl CPU {
         // self.mem_write_u16(0xFFFC, 0x8000);
     }
 
+    fn apply_mode(&mut self) {
+      if self.is_emulation_mode() {
+        self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF)
+      }
+    }
+
     pub fn run(&mut self) {
+        self.apply_mode();
         // if let Some(_nmi) = self.bus.poll_nmi_status() {
         //     self.interrupt_nmi();
         // }
@@ -687,7 +684,7 @@ impl CPU {
 */
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+        let value: u8 = self.mem_read(addr);
         self.set_register_a(value as u16);
         let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);

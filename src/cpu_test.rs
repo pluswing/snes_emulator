@@ -74,52 +74,75 @@ struct TestCaseData {
 }
 
 fn main() {
-    println!("CPU TEST!");
-    // TODO a9.n を実行時引数でもらう。
-    let target = "tests/cases/a9.e.json";
+    let targets = [
+      "tests/cases/a9.e.json", // LDA Immediate
+      "tests/cases/ad.e.json", // LDA Absolute
+    ];
 
-    let input_fn = fs::read_to_string(target).expect("JSON Read Failed.");
-    let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
+    for target in targets {
+      let input_fn = fs::read_to_string(target).expect("JSON Read Failed.");
+      let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
 
-    let mut cpu = CPU::new();
+      let mut cpu = CPU::new();
 
-    for data in &deserialized {
-      println!("RUN {}", data.name);
-      // cpuにInitialをセット
-      cpu.program_counter = data.Initial.Pc;
-      cpu.stack_pointer = data.Initial.S;
-      cpu.status = data.Initial.P;
-      cpu.register_a = data.Initial.A;
-      cpu.register_x = data.Initial.X;
-      cpu.register_y = data.Initial.Y;
-      cpu.data_bank = data.Initial.Dbr;
-      cpu.direct_page = data.Initial.D;
-      cpu.program_bank = data.Initial.Pbr;
-      cpu.mode = data.Initial.E;
-      for d in &data.Initial.Ram {
-        cpu.mem_write(d.0, d.1);
+      for data in &deserialized {
+        // cpuにInitialをセット
+        cpu.program_counter = data.Initial.Pc;
+        cpu.stack_pointer = data.Initial.S;
+        cpu.status = data.Initial.P;
+        cpu.register_a = data.Initial.A;
+        cpu.register_x = data.Initial.X;
+        cpu.register_y = data.Initial.Y;
+        cpu.data_bank = data.Initial.Dbr;
+        cpu.direct_page = data.Initial.D;
+        cpu.program_bank = data.Initial.Pbr;
+        cpu.mode = data.Initial.E;
+        for d in &data.Initial.Ram {
+          cpu.mem_write(d.0, d.1);
+        }
+
+        // cpuを1命令分動かす（？）
+        let opcode = cpu.mem_read(cpu.pc());
+        let arg1 = cpu.mem_read(cpu.pc()+1);
+        let arg2 = cpu.mem_read(cpu.pc()+2);
+        println!("RUN {} {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
+        cpu.run();
+        // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
+
+        // cpuの状態とFinalが合っているか確認
+        assert_eq!(
+          cpu.program_counter,
+          data.Final.Pc,
+          "actual: {:04X}, expected: {:04X}",
+          cpu.program_counter,
+          data.Final.Pc
+        );
+        assert_eq!(cpu.stack_pointer, data.Final.S);
+        assert_eq!(
+          cpu.register_a,
+          data.Final.A,
+          "[REG A] initial: {:04X} actual: {:04X}, expected: {:04X}",
+          data.Initial.A,
+          cpu.register_a,
+          data.Final.A,
+        );
+        assert_eq!(
+          cpu.status,
+          data.Final.P,
+          "[STATUS] actual: {:02X}, expected: {:02X}",
+          cpu.status,
+          data.Final.P,
+        );
+        assert_eq!(cpu.register_x, data.Final.X);
+        assert_eq!(cpu.register_y, data.Final.Y);
+        assert_eq!(cpu.data_bank, data.Final.Dbr);
+        assert_eq!(cpu.direct_page, data.Final.D);
+        assert_eq!(cpu.program_bank, data.Final.Pbr);
+        assert_eq!(cpu.mode, data.Final.E);
+        for d in &data.Final.Ram {
+          assert_eq!(cpu.mem_read(d.0), d.1);
+        }
+        // TODO data.Cycles
       }
-
-      // cpuを1命令分動かす（？）
-      let opcode = cpu.mem_read(cpu.pc());
-      println!("OP: {:02X}", opcode);
-      cpu.run();
-      // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
-
-      // cpuの状態とFinalが合っているか確認
-      assert_eq!(cpu.program_counter, data.Final.Pc);
-      assert_eq!(cpu.get_stack_pointer(), data.Final.S);
-      assert_eq!(cpu.status, data.Final.P);
-      assert_eq!(cpu.register_a, data.Final.A);
-      assert_eq!(cpu.register_x, data.Final.X);
-      assert_eq!(cpu.register_y, data.Final.Y);
-      assert_eq!(cpu.data_bank, data.Final.Dbr);
-      assert_eq!(cpu.direct_page, data.Final.D);
-      assert_eq!(cpu.program_bank, data.Final.Pbr);
-      assert_eq!(cpu.mode, data.Final.E);
-      for d in &data.Final.Ram {
-        assert_eq!(cpu.mem_read(d.0), d.1);
-      }
-      // TODO data.Cycles
     }
 }
