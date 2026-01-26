@@ -184,12 +184,19 @@ impl CPU {
                 panic!("AddressingMode::Accumulator");
             }
             // LDA #$44 => a9 44
-            AddressingMode::Immediate => pc,
+            AddressingMode::Immediate => {
+              pc
+            },
 
             // LDA $44 => a5 44
             AddressingMode::ZeroPage => {
-              let addr = self.mem_read(pc);
-              addr as u32
+              // = Direct Pageなので、統合する必要あり。
+              let addr = if self.is_native_mode() {
+                self.mem_read_u16(pc) as u32
+              } else {
+                self.mem_read(pc) as u32
+              };
+              (self.direct_page as u32).wrapping_add(addr)
             },
 
             // LDA $4400 => ad 00 44
@@ -684,8 +691,8 @@ impl CPU {
 */
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        let value: u8 = self.mem_read(addr);
-        self.set_register_a(value as u16);
+        let value = self.mem_read_u16(addr);
+        self.set_register_a(value);
         let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);
     }

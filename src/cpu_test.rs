@@ -70,13 +70,16 @@ struct TestCaseData {
     #[serde(rename = "final")]
     Final: TestCaseRegisterData,
     #[serde(rename = "cycles")]
-    Cycles: Vec<(u32, u8, String)>,
+    Cycles: Vec<(u32, Option<u8>, String)>,
 }
 
 fn main() {
     let targets = [
       "tests/cases/a9.e.json", // LDA Immediate
+      // "tests/cases/a9.n.json", // LDA Immediate
       "tests/cases/ad.e.json", // LDA Absolute
+      // "tests/cases/ad.n.json", // LDA Absolute
+      "tests/cases/a5.e.json", // LDA Direct Page (=6502: Zero Page)
     ];
 
     for target in targets {
