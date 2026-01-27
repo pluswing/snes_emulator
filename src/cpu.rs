@@ -196,7 +196,7 @@ impl CPU {
               } else {
                 self.mem_read(pc) as u32
               };
-              (self.direct_page as u32).wrapping_add(addr)
+              (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF
             },
 
             // LDA $4400 => ad 00 44

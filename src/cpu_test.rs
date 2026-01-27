@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
 use std::fs;
 use std::io::prelude::*;
+use std::fmt;
 
 use crate::cpu::CPU;
 
@@ -34,7 +35,7 @@ mod opscodes;
 }
  */
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 struct TestCaseRegisterData {
   #[serde(rename = "pc")]
@@ -59,6 +60,20 @@ struct TestCaseRegisterData {
   E: u8,
   #[serde(rename = "ram")]
   Ram: Vec<(u32, u8)>,
+}
+
+impl fmt::Debug for TestCaseRegisterData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "A:   {:04X} X:  {:04X} Y: {:04X}  ", self.A, self.X, self.Y);
+        write!(f, "PBR: {:02X} PC: {:04X} => {:06X}\n", self.Pbr, self.Pc, (self.Pbr as u32) << 16 | self.Pc as u32);
+        write!(f, "S:   {:04X} P:  {:0>8b} E: {} ", self.S, self.P, self.E);
+        write!(f, "DBR: {:02X} DP: {:04X}\n", self.Dbr, self.D);
+        write!(f, "RAM:");
+        for r in &self.Ram {
+          write!(f, " {:06X} {:02X},", r.0, r.1);
+        }
+        Result::Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -108,34 +123,19 @@ fn main() {
         let opcode = cpu.mem_read(cpu.pc());
         let arg1 = cpu.mem_read(cpu.pc()+1);
         let arg2 = cpu.mem_read(cpu.pc()+2);
-        println!("RUN {} {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
+        println!("---------------------");
+        println!("RUN name: \"{}\" {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
         cpu.run();
         // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
 
+        println!("initial: \n{:?}", data.Initial);
+        println!("expected: \n{:?}", data.Final);
+
         // cpuの状態とFinalが合っているか確認
-        assert_eq!(
-          cpu.program_counter,
-          data.Final.Pc,
-          "actual: {:04X}, expected: {:04X}",
-          cpu.program_counter,
-          data.Final.Pc
-        );
+        assert_eq!(cpu.program_counter, data.Final.Pc, "[PC] {:04X} {:04X}", cpu.program_counter, data.Final.Pc);
         assert_eq!(cpu.stack_pointer, data.Final.S);
-        assert_eq!(
-          cpu.register_a,
-          data.Final.A,
-          "[REG A] initial: {:04X} actual: {:04X}, expected: {:04X}",
-          data.Initial.A,
-          cpu.register_a,
-          data.Final.A,
-        );
-        assert_eq!(
-          cpu.status,
-          data.Final.P,
-          "[STATUS] actual: {:02X}, expected: {:02X}",
-          cpu.status,
-          data.Final.P,
-        );
+        assert_eq!(cpu.register_a, data.Final.A, "[A] {:04X} {:04X}", cpu.register_a, data.Final.A);
+        assert_eq!(cpu.status, data.Final.P);
         assert_eq!(cpu.register_x, data.Final.X);
         assert_eq!(cpu.register_y, data.Final.Y);
         assert_eq!(cpu.data_bank, data.Final.Dbr);
