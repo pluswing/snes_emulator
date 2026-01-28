@@ -74,18 +74,33 @@ impl OpCode {
     }
 }
 
-const FLAG_CARRY: u8 = 1 << 0;
-const FLAG_ZERO: u8 = 1 << 1;
-const FLAG_INTERRRUPT: u8 = 1 << 2;
-const FLAG_DECIMAL: u8 = 1 << 3;
-const FLAG_BREAK: u8 = 1 << 4;
-const FLAG_BREAK2: u8 = 1 << 5; // 5 は未使用。
-const FLAG_OVERFLOW: u8 = 1 << 6;
+// 1bit	7	6	5	4	3	2	1	0
+//      N	V	M	X	D	I	Z	C
+//                    E
+// N : ネガティブフラグ (1 = Negative)
+// V : オーバーフローフラグ (1 = Overflow)
+// M : メモリ/アキュームレータ選択フラグ (1 = 8-bit, 0 = 16 bit)
+// X : インデックスレジスタ選択フラグ (1 = 8-bit, 0 = 16-bit)
+// D : 10進モードフラグ (1 = Decimal, 0 = Binary)
+// I : IRQ 禁止フラグ (1 = Disabled)
+// Z : ゼロフラグ (1 = Result Zero)
+// C : キャリーフラグ (1 = Carry)
+// E : エミュレーションフラグ (0 = Native Mode)
+
 const FLAG_NEGATIVE: u8 = 1 << 7;
+const FLAG_OVERFLOW: u8 = 1 << 6;
+pub const FLAG_MEMORY_ACCUMULATOR_MODE: u8 = 1 << 5;
+const FLAG_BREAK2: u8 = 1 << 5; // TODO 使わなければ削除
+const FLAG_BREAK: u8 = 1 << 4;
+const FLAG_INDEX_REGISTER_MODE: u8 = 1 << 4;
+const FLAG_DECIMAL: u8 = 1 << 3;
+const FLAG_INTERRRUPT: u8 = 1 << 2;
+const FLAG_ZERO: u8 = 1 << 1;
+const FLAG_CARRY: u8 = 1 << 0;
 
-const SIGN_BIT: u8 = 1 << 7;
+const SIGN_BIT: u8 = 1 << 7; // FIXME FLAG_OVERFLOWで使用？
 
-const MODE_16BIT: u8 = 0;
+pub const MODE_16BIT: u8 = 0;
 const MODE_8BIT: u8 = 1;
 
 pub struct CPU {
@@ -159,7 +174,8 @@ impl CPU {
     }
 
     pub fn set_register_a(&mut self, value: u16) {
-      if self.is_native_mode() {
+      let a16mode = (self.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT;
+      if self.is_native_mode() && a16mode {
         self.register_a = value
       } else {
         self.register_a = (self.register_a & 0xFF00) | (value & 0x00FF)

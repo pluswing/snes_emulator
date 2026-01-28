@@ -91,7 +91,7 @@ struct TestCaseData {
 fn main() {
     let targets = [
       "tests/cases/a9.e.json", // LDA Immediate
-      // "tests/cases/a9.n.json", // LDA Immediate
+      "tests/cases/a9.n.json", // LDA Immediate
       "tests/cases/ad.e.json", // LDA Absolute
       // "tests/cases/ad.n.json", // LDA Absolute
       "tests/cases/a5.e.json", // LDA Direct Page (=6502: Zero Page)
@@ -133,17 +133,17 @@ fn main() {
 
         // cpuの状態とFinalが合っているか確認
         assert_eq!(cpu.program_counter, data.Final.Pc, "[PC] {:04X} {:04X}", cpu.program_counter, data.Final.Pc);
-        assert_eq!(cpu.stack_pointer, data.Final.S);
+        assert_eq!(cpu.stack_pointer, data.Final.S, "[S] {:04X} {:04X}", cpu.stack_pointer, data.Final.S);
         assert_eq!(cpu.register_a, data.Final.A, "[A] {:04X} {:04X}", cpu.register_a, data.Final.A);
-        assert_eq!(cpu.status, data.Final.P);
-        assert_eq!(cpu.register_x, data.Final.X);
-        assert_eq!(cpu.register_y, data.Final.Y);
-        assert_eq!(cpu.data_bank, data.Final.Dbr);
-        assert_eq!(cpu.direct_page, data.Final.D);
-        assert_eq!(cpu.program_bank, data.Final.Pbr);
+        assert_eq!(cpu.status, data.Final.P, "[P] {:0>8b} {:0>8b}", cpu.status, data.Final.P);
+        assert_eq!(cpu.register_x, data.Final.X, "[X] {:04X} {:04X}", cpu.register_x, data.Final.X);
+        assert_eq!(cpu.register_y, data.Final.Y, "[Y] {:04X} {:04X}", cpu.register_y, data.Final.Y);
+        assert_eq!(cpu.data_bank, data.Final.Dbr, "[DBR] {:02X} {:02X}", cpu.data_bank, data.Final.Dbr);
+        assert_eq!(cpu.direct_page, data.Final.D, "[DP] {:04X} {:04X}", cpu.direct_page, data.Final.D);
+        assert_eq!(cpu.program_bank, data.Final.Pbr, "[PBR] {:02X} {:02X}", cpu.program_bank, data.Final.Pbr);
         assert_eq!(cpu.mode, data.Final.E);
         for d in &data.Final.Ram {
-          assert_eq!(cpu.mem_read(d.0), d.1);
+          assert_eq!(cpu.mem_read(d.0), d.1, "[MEM] {:06X} {:02X} {:02X}", d.0, cpu.mem_read(d.0), d.1);
         }
         // TODO data.Cycles
       }
