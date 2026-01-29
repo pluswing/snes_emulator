@@ -173,9 +173,12 @@ impl CPU {
       !self.is_native_mode()
     }
 
+    fn is_accumulator_16bit_mode(&self) -> bool {
+      self.is_native_mode() && (self.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT
+    }
+
     pub fn set_register_a(&mut self, value: u16) {
-      let a16mode = (self.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT;
-      if self.is_native_mode() && a16mode {
+      if self.is_accumulator_16bit_mode() {
         self.register_a = value
       } else {
         self.register_a = (self.register_a & 0xFF00) | (value & 0x00FF)
@@ -183,7 +186,7 @@ impl CPU {
     }
 
     pub fn get_register_a(&mut self) -> u16 {
-      if self.is_native_mode() {
+      if self.is_accumulator_16bit_mode() {
         self.register_a
       } else {
         self.register_a & 0x00FF
@@ -207,7 +210,7 @@ impl CPU {
             // LDA $44 => a5 44
             AddressingMode::ZeroPage => {
               // = Direct Pageなので、統合する必要あり。
-              let addr = if self.is_native_mode() {
+              let addr = if self.is_accumulator_16bit_mode() {
                 self.mem_read_u16(pc) as u32
               } else {
                 self.mem_read(pc) as u32
@@ -1109,7 +1112,8 @@ impl CPU {
             self.status & !FLAG_ZERO
         };
 
-        self.status = if result & 0x80 != 0 {
+        let test_bit = if self.is_accumulator_16bit_mode() { 0x8000 } else { 0x0080 };
+        self.status = if (result & test_bit) != 0 {
             self.status | FLAG_NEGATIVE
         } else {
             self.status & !FLAG_NEGATIVE

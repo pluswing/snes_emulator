@@ -90,11 +90,14 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      "tests/cases/a9.e.json", // LDA Immediate
-      "tests/cases/a9.n.json", // LDA Immediate
-      "tests/cases/ad.e.json", // LDA Absolute
-      // "tests/cases/ad.n.json", // LDA Absolute
-      "tests/cases/a5.e.json", // LDA Direct Page (=6502: Zero Page)
+      // "tests/cases/a9.e.json", // LDA Immediate
+      // "tests/cases/a9.n.json",
+      // "tests/cases/ad.e.json", // LDA Absolute
+      // "tests/cases/ad.n.json",
+      // "tests/cases/af.e.json", // LDA Absolute Long
+      // "tests/cases/af.n.json",
+      // "tests/cases/a5.e.json", // LDA Direct Page (=6502: Zero Page)
+      // "tests/cases/a5.n.json"
     ];
 
     for target in targets {
@@ -104,6 +107,7 @@ fn main() {
       let mut cpu = CPU::new();
 
       for data in &deserialized {
+        cpu.memory = vec![0; 0x100_0000];
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;
@@ -128,8 +132,8 @@ fn main() {
         cpu.run();
         // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
 
-        println!("initial: \n{:?}", data.Initial);
-        println!("expected: \n{:?}", data.Final);
+        println!("initial:      NVMXDIZC\n{:?}", data.Initial);
+        println!("expected:     NVMXDIZC\n{:?}", data.Final);
 
         // cpuの状態とFinalが合っているか確認
         assert_eq!(cpu.program_counter, data.Final.Pc, "[PC] {:04X} {:04X}", cpu.program_counter, data.Final.Pc);

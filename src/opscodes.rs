@@ -262,6 +262,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0xFC, OpCode::new(0xFC, "*NOP", 3, 4, CycleCalcMode::Page, AddressingMode::Absolute_Indexed_by_X));
   m.insert(0x8B, OpCode::new(0x8B, "*ANE", 2, 2, CycleCalcMode::None, AddressingMode::Immediate));
   m.insert(0x9B, OpCode::new(0x9B, "*SHS", 3, 5, CycleCalcMode::None, AddressingMode::Absolute_Indexed_by_Y));
+
+
+  // added
+  m.insert(0xAF, OpCode::new(0xAF, "LDA", 4, 5, CycleCalcMode::None, AddressingMode::Absolute_Long));
   m
 });
 
