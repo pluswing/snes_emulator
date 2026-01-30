@@ -266,6 +266,8 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
 
   // added
   m.insert(0xAF, OpCode::new(0xAF, "LDA", 4, 5, CycleCalcMode::None, AddressingMode::Absolute_Long));
+  m.insert(0xB2, OpCode::new(0xB2, "LDA", 2, 5, CycleCalcMode::None, AddressingMode::Direct_Page_Indirect));
+
   m
 });
 

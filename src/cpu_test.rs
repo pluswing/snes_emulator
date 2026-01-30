@@ -90,24 +90,24 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      // "tests/cases/a9.e.json", // LDA Immediate
-      // "tests/cases/a9.n.json",
-      // "tests/cases/ad.e.json", // LDA Absolute
-      // "tests/cases/ad.n.json",
-      // "tests/cases/af.e.json", // LDA Absolute Long
-      // "tests/cases/af.n.json",
-      // "tests/cases/a5.e.json", // LDA Direct Page (=6502: Zero Page)
-      // "tests/cases/a5.n.json"
+      "a9.e", // LDA Immediate
+      "a9.n",
+      "ad.e", // LDA Absolute
+      "ad.n",
+      "af.e", // LDA Absolute Long
+      "af.n",
+      "a5.e", // LDA Direct Page (=6502: Zero Page)
+      "a5.n",
+      "b2.e", // LDA Direct Page Indirect
     ];
 
     for target in targets {
-      let input_fn = fs::read_to_string(target).expect("JSON Read Failed.");
+      let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
       let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
 
       let mut cpu = CPU::new();
 
       for data in &deserialized {
-        cpu.memory = vec![0; 0x100_0000];
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;
@@ -152,4 +152,6 @@ fn main() {
         // TODO data.Cycles
       }
     }
+
+    println!("OK!");
 }
