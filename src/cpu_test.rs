@@ -90,15 +90,20 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      "a9.e", // LDA Immediate
-      "a9.n",
-      "ad.e", // LDA Absolute
-      "ad.n",
-      "af.e", // LDA Absolute Long
-      "af.n",
-      "a5.e", // LDA Direct Page (=6502: Zero Page)
-      "a5.n",
-      "b2.e", // LDA Direct Page Indirect
+      // "a9.e", // LDA Immediate
+      // "a9.n",
+      // "ad.e", // LDA Absolute
+      // "ad.n",
+      // "af.e", // LDA Absolute Long
+      // "af.n",
+      // "a5.e", // LDA Direct Page (=6502: Zero Page)
+      // "a5.n",
+      // "b2.e", // LDA Direct Page Indirect
+      // "b2.n",
+      // "a7.e", // LDA Direct Page Indirect Long
+      // "a7.n",
+      "bd.e", // LDA Absolute Indexed by X
+      "bd.n",
     ];
 
     for target in targets {

@@ -237,12 +237,9 @@ impl CPU {
             // LDA $4400,X => bd 00 44
             AddressingMode::Absolute_Indexed_by_X => {
                 let base = self.mem_read_u16(pc);
-                let addr = base.wrapping_add(self.register_x as u16);
-                // (+1 if page crossed)
-                if base & 0xFF00 != addr & 0xFF00 {
-                    self.add_cycles += 1;
-                }
-                addr as u32
+                let addr = ((self.data_bank as u32) << 16) | base as u32;
+                let addr = addr.wrapping_add(self.register_x as u32);
+                addr
             }
 
             // LDA $4400,Y => b9 00 44
@@ -306,12 +303,10 @@ impl CPU {
             }
             // LDA [$12] => A7 12
             AddressingMode::Direct_Page_Indirect_Long => {
-              let base: u16 = self.mem_read_u16(pc);
-              let base = (self.direct_page as u32).wrapping_add(base as u32);
-              // 12 13 14
-              // AA BB CC => CC:BBAA
-              let addr = self.mem_read_u16(base);
-              let bank = self.mem_read(base + 2);
+              let base = self.mem_read(pc) as u32;
+              let base = (self.direct_page as u32).wrapping_add(base) & 0x00FFFF;
+              let addr = self.mem_read_u16(base) as u32;
+              let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
             }
             // LDA dp, X => B5 dp
@@ -362,13 +357,6 @@ impl CPU {
     }
 
     pub fn mem_read_u16(&mut self, pos: u32) -> u16 {
-        // FIXME
-        // if pos == 0x00FF || pos == 0x02FF {
-        //     debug!("mem_read_u16 page boundary. {:04X}", pos);
-        //     let lo = self.mem_read(pos) as u16;
-        //     let hi = self.mem_read(pos & 0xFF00) as u16;
-        //     return (hi << 8) | (lo as u16);
-        // }
         let lo = self.mem_read(pos) as u16;
         let hi = self.mem_read(pos + 1) as u16;
         (hi << 8) | (lo as u16)
