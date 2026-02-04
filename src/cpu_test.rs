@@ -102,8 +102,9 @@ fn main() {
       // "b2.n",
       // "a7.e", // LDA Direct Page Indirect Long
       // "a7.n",
-      "bd.e", // LDA Absolute Indexed by X
-      "bd.n",
+      // "bd.e", // LDA Absolute Indexed by X
+      // "bd.n",
+      "bf.e", // LDA Absolute Long Indexed by X
     ];
 
     for target in targets {
@@ -134,11 +135,10 @@ fn main() {
         let arg2 = cpu.mem_read(cpu.pc()+2);
         println!("---------------------");
         println!("RUN name: \"{}\" {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
-        cpu.run();
-        // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
-
         println!("initial:      NVMXDIZC\n{:?}", data.Initial);
         println!("expected:     NVMXDIZC\n{:?}", data.Final);
+        cpu.run();
+        // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
 
         // cpuの状態とFinalが合っているか確認
         assert_eq!(cpu.program_counter, data.Final.Pc, "[PC] {:04X} {:04X}", cpu.program_counter, data.Final.Pc);

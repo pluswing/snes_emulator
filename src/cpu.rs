@@ -7,7 +7,6 @@ use crate::opscodes::{call, CPU_OPS_CODES};
 pub enum AddressingMode {
     Accumulator,
     Immediate,
-    ZeroPage,
     ZeroPage_X,
     ZeroPage_Y,
     Absolute,
@@ -21,7 +20,7 @@ pub enum AddressingMode {
 
     // 65816
     Absolute_Long,
-    // Direct_Page, => ZeroPage
+    Direct_Page, // ZeroPage
     Direct_Page_Indirect,
     Direct_Page_Indirect_Long,
     Absolute_Long_Indexed_by_X,
@@ -208,7 +207,7 @@ impl CPU {
             },
 
             // LDA $44 => a5 44
-            AddressingMode::ZeroPage => {
+            AddressingMode::Direct_Page => {
               // = Direct Pageなので、統合する必要あり。
               let addr = self.mem_read(pc) as u32;
               (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF
@@ -239,7 +238,7 @@ impl CPU {
                 let base = self.mem_read_u16(pc);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.register_x as u32);
-                addr
+                addr & 0xFFFFFF
             }
 
             // LDA $4400,Y => b9 00 44
@@ -689,7 +688,6 @@ impl CPU {
 */
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        println!("ADDR {:06X}", addr);
         let value = self.mem_read_u16(addr);
         self.set_register_a(value);
         let a = self.get_register_a();
