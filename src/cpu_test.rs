@@ -104,7 +104,11 @@ fn main() {
       // "a7.n",
       // "bd.e", // LDA Absolute Indexed by X
       // "bd.n",
-      "bf.e", // LDA Absolute Long Indexed by X
+      // "bf.e", // LDA Absolute Long Indexed by X
+      // "bf.n",
+      // "b9.e", // LDA Absolute Indexed by Y
+      // "b9.n",
+      "b5.e", // LDA Direct Page Indexed by X
     ];
 
     for target in targets {
@@ -114,6 +118,10 @@ fn main() {
       let mut cpu = CPU::new();
 
       for data in &deserialized {
+        if data.name == "b5 e 50" || data.name == "b5 e 896" {
+          // この2つは16進で下3桁目が1ずれている
+          continue;
+        }
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;

@@ -7,7 +7,6 @@ use crate::opscodes::{call, CPU_OPS_CODES};
 pub enum AddressingMode {
     Accumulator,
     Immediate,
-    ZeroPage_X,
     ZeroPage_Y,
     Absolute,
     Absolute_Indexed_by_X,
@@ -220,10 +219,13 @@ impl CPU {
             }
 
             // LDA $44,X => b5 44
-            AddressingMode::ZeroPage_X => {
-                let pos = self.mem_read(pc);
-                let addr = pos.wrapping_add(self.register_x as u8) as u16;
-                addr as u32
+            AddressingMode::Direct_Page_Indexed_by_X => {
+              // アドレス部の内容にダイレクトページレジスタの値とインデクスレジスタを足したアドレスが目的のデータの各のされているアドレスを表します。
+              // Xレジスタを足すのかYレジスタを足すのかで$12,xと$12,yという表し方があります。
+                let addr: u32 = self.mem_read(pc) as u32;
+                let addr = (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF;
+                let addr = addr.wrapping_add(self.register_x as u32);
+                addr
             }
 
             // LDX $44,Y => b6 44
@@ -244,12 +246,9 @@ impl CPU {
             // LDA $4400,Y => b9 00 44
             AddressingMode::Absolute_Indexed_by_Y => {
                 let base = self.mem_read_u16(pc);
-                let addr = base.wrapping_add(self.register_y as u16);
-                // (+1 if page crossed)
-                if base & 0xFF00 != addr & 0xFF00 {
-                    self.add_cycles += 1;
-                }
-                addr as u32
+                let addr = ((self.data_bank as u32) << 16) | base as u32;
+                let addr = addr.wrapping_add(self.register_y as u32);
+                addr & 0xFFFFFF
             }
             // JMP -> same Absolute
             AddressingMode::Indirect => {
@@ -337,7 +336,13 @@ impl CPU {
               (self.data_bank as u32) << 16 | addr as u32
             }
             AddressingMode::Absolute_Long_Indexed_by_X => {
-              todo!("Absolute_Long_Indexed_by_X")
+                // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
+                // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
+                let base = self.mem_read_u16(pc);
+                let bank = self.mem_read(pc + 2);
+                let addr = ((bank as u32) << 16) | base as u32;
+                let addr = addr.wrapping_add(self.register_x as u32);
+                addr & 0xFFFFFF
             }
             AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
               todo!("Direct_Page_Indirect_Long_Indexed_by_Y")
@@ -409,7 +414,7 @@ impl CPU {
 
         let pc = (self.program_bank as u32) << 16 | self.program_counter as u32;
         let opscode = self.mem_read(pc);
-        self.program_counter += 1;
+        self.program_counter = self.program_counter.wrapping_add(1);
 
         let op = CPU_OPS_CODES.get(&opscode);
         match op {
@@ -1180,7 +1185,7 @@ fn address(program_counter: u16, ops: &OpCode, args: &Vec<u8>) -> String {
             format!("${:<02X}{:<02X}", args[1], args[0])
         }
         // LDA $44,X => b5 44
-        AddressingMode::ZeroPage_X => {
+        AddressingMode::Direct_Page_Indexed_by_X => {
             format!("${:<02X},X", args[0])
         }
 
@@ -1244,7 +1249,7 @@ fn memory_access(cpu: &mut CPU, ops: &OpCode, args: &Vec<u8>) -> String {
             let value = cpu.mem_read(args[0] as u32);
             format!("= {:<02X}", value)
         }
-        AddressingMode::ZeroPage_X => {
+        AddressingMode::Direct_Page_Indexed_by_X => {
             let addr = (args[0] as u16).wrapping_add(cpu.register_x) as u16;
             let value = cpu.mem_read(addr as u32);
             format!("@ {:<02X} = {:<02X}", addr, value)
