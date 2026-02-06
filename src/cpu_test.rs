@@ -118,10 +118,6 @@ fn main() {
       let mut cpu = CPU::new();
 
       for data in &deserialized {
-        if data.name == "b5 e 50" || data.name == "b5 e 896" {
-          // この2つは16進で下3桁目が1ずれている
-          continue;
-        }
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;

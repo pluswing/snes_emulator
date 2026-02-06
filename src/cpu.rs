@@ -222,11 +222,45 @@ impl CPU {
             AddressingMode::Direct_Page_Indexed_by_X => {
               // アドレス部の内容にダイレクトページレジスタの値とインデクスレジスタを足したアドレスが目的のデータの各のされているアドレスを表します。
               // Xレジスタを足すのかYレジスタを足すのかで$12,xと$12,yという表し方があります。
-                let addr: u32 = self.mem_read(pc) as u32;
-                let addr = (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF;
-                let addr = addr.wrapping_add(self.register_x as u32);
-                addr
+              let M: u32 = self.mem_read(pc) as u32;
+              let X = self.register_x as u32;
+              let DP = self.direct_page as u32;
+              let MX = (M + X) & 0x00FF;
+              DP + MX
+              // let addr = ().wrapping_add(addr) & 0x00FFFF;
+              // // 16bitと8bitモードで処理を分ける必要がありそう。
+              // return addr.wrapping_add();
+              // let lo = addr.wrapping_add(self.register_x as u32) & 0x00FF;
+              // let hi = addr & 0xFF00;
+              // hi | lo
             }
+            // b5 e 50
+            // M = 0xEA
+            // DB = 0xC700
+            // 0xC700 + 0xEA = 0xC7EA
+            // X = 0xB2
+            // 0xC7EA + 0xB2 = 0xC89C
+            // 0x9C
+            // * 0xC79C
+            // M+X = 0x19C
+
+            // b5 e 2
+            // M = 0xC5
+            // DB = 0xD771
+            // 0xD771 + 0xC5 = 0xD836
+            // X = 0xE0
+            // 0xD836 + 0xE0 = 0xD916
+            // * 0xD916
+            // 0x1A5
+            // M+X = 0x1A5
+
+            // b5 e 1
+            // 0xFD
+            // 0x5F0E
+            // 0x5F0E + 0xFD = 0x600B
+            // 0xDF
+            // 0x600B + 0xDF = 0x60EA
+            // * 0x60EA
 
             // LDX $44,Y => b6 44
             AddressingMode::ZeroPage_Y => {
@@ -306,12 +340,6 @@ impl CPU {
               let addr = self.mem_read_u16(base) as u32;
               let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
-            }
-            // LDA dp, X => B5 dp
-            AddressingMode::Direct_Page_Indexed_by_X => {
-              let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr as u32) as u32;
-              addr.wrapping_add(self.register_x as u32)
             }
             // TODO LDAには無いアドレッシングモード
             AddressingMode::Direct_Page_Indexed_by_Y => {
