@@ -108,7 +108,9 @@ fn main() {
       // "bf.n",
       // "b9.e", // LDA Absolute Indexed by Y
       // "b9.n",
-      "b5.e", // LDA Direct Page Indexed by X
+      // "b5.e", // LDA Direct Page Indexed by X
+      // "b5.n",
+      "a1.e", // LDA Direct Page Indexed Indirect by X
     ];
 
     for target in targets {

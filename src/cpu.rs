@@ -175,6 +175,11 @@ impl CPU {
       self.is_native_mode() && (self.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT
     }
 
+
+    fn is_index_register_16bit_mode(&self) -> bool {
+      self.is_native_mode() && (self.status & FLAG_INDEX_REGISTER_MODE) == MODE_16BIT
+    }
+
     pub fn set_register_a(&mut self, value: u16) {
       if self.is_accumulator_16bit_mode() {
         self.register_a = value
@@ -188,6 +193,22 @@ impl CPU {
         self.register_a
       } else {
         self.register_a & 0x00FF
+      }
+    }
+
+    pub fn set_register_x(&mut self, value: u16) {
+      if self.is_index_register_16bit_mode() {
+        self.register_x = value
+      } else {
+        self.register_x = (self.register_x & 0xFF00) | (value & 0x00FF)
+      }
+    }
+
+    pub fn get_register_x(&mut self) -> u16 {
+      if self.is_index_register_16bit_mode() {
+        self.register_x
+      } else {
+        self.register_x & 0x00FF
       }
     }
 
@@ -222,45 +243,15 @@ impl CPU {
             AddressingMode::Direct_Page_Indexed_by_X => {
               // アドレス部の内容にダイレクトページレジスタの値とインデクスレジスタを足したアドレスが目的のデータの各のされているアドレスを表します。
               // Xレジスタを足すのかYレジスタを足すのかで$12,xと$12,yという表し方があります。
-              let M: u32 = self.mem_read(pc) as u32;
-              let X = self.register_x as u32;
-              let DP = self.direct_page as u32;
-              let MX = (M + X) & 0x00FF;
-              DP + MX
-              // let addr = ().wrapping_add(addr) & 0x00FFFF;
-              // // 16bitと8bitモードで処理を分ける必要がありそう。
-              // return addr.wrapping_add();
-              // let lo = addr.wrapping_add(self.register_x as u32) & 0x00FF;
-              // let hi = addr & 0xFF00;
-              // hi | lo
+              let addr: u32 = self.mem_read(pc) as u32;
+              let dp = self.direct_page as u32;
+              let addr = dp.wrapping_add(addr);
+              if (dp & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                (addr & 0xFF00) | ((addr + self.get_register_x() as u32) & 0x00FF) & 0x00FFFF
+              } else {
+                addr.wrapping_add(self.get_register_x() as u32) & 0x00FFFF
+              }
             }
-            // b5 e 50
-            // M = 0xEA
-            // DB = 0xC700
-            // 0xC700 + 0xEA = 0xC7EA
-            // X = 0xB2
-            // 0xC7EA + 0xB2 = 0xC89C
-            // 0x9C
-            // * 0xC79C
-            // M+X = 0x19C
-
-            // b5 e 2
-            // M = 0xC5
-            // DB = 0xD771
-            // 0xD771 + 0xC5 = 0xD836
-            // X = 0xE0
-            // 0xD836 + 0xE0 = 0xD916
-            // * 0xD916
-            // 0x1A5
-            // M+X = 0x1A5
-
-            // b5 e 1
-            // 0xFD
-            // 0x5F0E
-            // 0x5F0E + 0xFD = 0x600B
-            // 0xDF
-            // 0x600B + 0xDF = 0x60EA
-            // * 0x60EA
 
             // LDX $44,Y => b6 44
             AddressingMode::ZeroPage_Y => {
