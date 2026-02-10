@@ -212,6 +212,22 @@ impl CPU {
       }
     }
 
+    pub fn set_register_y(&mut self, value: u16) {
+      if self.is_index_register_16bit_mode() {
+        self.register_y = value
+      } else {
+        self.register_y = (self.register_y & 0xFF00) | (value & 0x00FF)
+      }
+    }
+
+    pub fn get_register_y(&mut self) -> u16 {
+      if self.is_index_register_16bit_mode() {
+        self.register_y
+      } else {
+        self.register_y & 0x00FF
+      }
+    }
+
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         let pc = self.pc();
         match mode {
@@ -246,11 +262,12 @@ impl CPU {
               let addr: u32 = self.mem_read(pc) as u32;
               let dp = self.direct_page as u32;
               let addr = dp.wrapping_add(addr);
-              if (dp & 0x00FF) == 0x00 && self.is_emulation_mode() {
-                (addr & 0xFF00) | ((addr + self.get_register_x() as u32) & 0x00FF) & 0x00FFFF
+              let addr = if (dp & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                (addr & 0xFF00) | ((addr + self.get_register_x() as u32) & 0x00FF)
               } else {
-                addr.wrapping_add(self.get_register_x() as u32) & 0x00FFFF
-              }
+                addr.wrapping_add(self.get_register_x() as u32)
+              };
+              addr & 0x00FFFF
             }
 
             // LDX $44,Y => b6 44
@@ -340,19 +357,32 @@ impl CPU {
             }
             // LDA (dp, X) => A1 dp
             AddressingMode::Direct_Page_Indexed_Indirect_by_X => {
-              let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
-              let addr = addr.wrapping_add(self.register_x as u32);
-              let addr = self.mem_read_u16(addr);
-              (self.data_bank as u32) << 16 | addr as u32
+              // アドレス部の内容にダイレクトページレジスタとXレジスタの値を足して得られるアドレスから16bitを読み込み、それを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
+              // ダイレクトインデクスYインダイレクトモードはありません。($12, x)のように表します。
+              let addr: u32 = self.mem_read(pc) as u32;
+              let dp = self.direct_page as u32;
+              let addr = dp.wrapping_add(addr);
+              let addr = if (dp & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                (addr & 0xFF00) | ((addr + self.get_register_x() as u32) & 0x00FF)
+              } else {
+                addr.wrapping_add(self.get_register_x() as u32)
+              };
+              let addr = addr & 0x00FFFF;
+              let addr = self.mem_read_u16(addr) as u32;
+              (self.data_bank as u32) << 16 | addr
             }
             // LDA (dp), Y => B1 dp
             AddressingMode::Direct_Page_Indirect_Indexed_by_Y => {
-              let addr = self.mem_read(pc);
-              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
-              let addr = self.mem_read_u16(addr) as u32;
-              let addr = addr.wrapping_add(self.register_y as u32);
-              (self.data_bank as u32) << 16 | addr as u32
+              // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから16bitを読み込み、さらにそれにYレジスタを足したものを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
+              // ($12),yのように表します。
+              let M = self.mem_read(pc);
+              let DPM = (self.direct_page as u32).wrapping_add(M as u32);
+              let DPM = DPM & 0x00FFFF;
+              let RAM = self.mem_read_u16(DPM) as u32;
+              let Y = self.get_register_y();
+              let addr = RAM.wrapping_add(Y as u32);
+              println!("M: {:02X}, DP: {:04X}, DPM: {:04X}, RAM: {:04X}, Y: {:04X} => ADDR: {:04X}, E => {:06X}", M, self.direct_page, DPM, RAM, Y, addr, ((self.data_bank as u32) << 16).wrapping_add(addr as u32));
+              ((self.data_bank as u32) << 16).wrapping_add(addr as u32)
             }
             AddressingMode::Absolute_Long_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。

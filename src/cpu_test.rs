@@ -110,7 +110,10 @@ fn main() {
       // "b9.n",
       // "b5.e", // LDA Direct Page Indexed by X
       // "b5.n",
-      "a1.e", // LDA Direct Page Indexed Indirect by X
+      // "a1.e", // LDA Direct Page Indexed Indirect by X
+      // "a1.n",
+      "b1.e", // LDA Direct Page Indirect Indexed by Y
+
     ];
 
     for target in targets {
