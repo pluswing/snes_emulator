@@ -375,14 +375,12 @@ impl CPU {
             AddressingMode::Direct_Page_Indirect_Indexed_by_Y => {
               // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから16bitを読み込み、さらにそれにYレジスタを足したものを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
               // ($12),yのように表します。
-              let M = self.mem_read(pc);
-              let DPM = (self.direct_page as u32).wrapping_add(M as u32);
-              let DPM = DPM & 0x00FFFF;
-              let RAM = self.mem_read_u16(DPM) as u32;
-              let Y = self.get_register_y();
-              let addr = RAM.wrapping_add(Y as u32);
-              println!("M: {:02X}, DP: {:04X}, DPM: {:04X}, RAM: {:04X}, Y: {:04X} => ADDR: {:04X}, E => {:06X}", M, self.direct_page, DPM, RAM, Y, addr, ((self.data_bank as u32) << 16).wrapping_add(addr as u32));
-              ((self.data_bank as u32) << 16).wrapping_add(addr as u32)
+              let addr = self.mem_read(pc);
+              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
+              let addr = addr & 0x00FFFF;
+              let addr = self.mem_read_u16(addr) as u32;
+              let addr = addr.wrapping_add(self.get_register_y() as u32);
+              ((self.data_bank as u32) << 16).wrapping_add(addr) & 0xFFFFFF
             }
             AddressingMode::Absolute_Long_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。

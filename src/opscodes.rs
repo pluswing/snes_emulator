@@ -427,10 +427,10 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 */
     "LDA" => {
       cpu.lda(&op.addressing_mode);
-      cpu.program_counter += op.bytes - 1;
+      cpu.program_counter = cpu.program_counter.wrapping_add(op.bytes - 1);
 
       if op.addressing_mode == AddressingMode::Immediate && (cpu.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT {
-        cpu.program_counter += 1;
+        cpu.program_counter = cpu.program_counter.wrapping_add(1);
       }
     }
 /*
