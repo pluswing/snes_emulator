@@ -114,7 +114,9 @@ fn main() {
       // "a1.n",
       // "b1.e", // LDA Direct Page Indirect Indexed by Y
       // "b1.n",
-      "b7.e", // Direct Page Indirect Long Indexed by Y
+      // "b7.e", // LDA Direct Page Indirect Long Indexed by Y
+      // "b7.n",
+      "a3.e" // LDA Stack Relative
     ];
 
     for target in targets {

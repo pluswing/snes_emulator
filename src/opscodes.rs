@@ -212,7 +212,7 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0xB7, OpCode::new(0xB7, "*LAX", 2, 4, CycleCalcMode::None, AddressingMode::ZeroPage_Y));
   m.insert(0xAF, OpCode::new(0xAF, "*LAX", 3, 4, CycleCalcMode::None, AddressingMode::Absolute));
   // m.insert(0xBF, OpCode::new(0xBF, "*LAX", 3, 4, CycleCalcMode::Page, AddressingMode::Absolute_Indexed_by_Y));
-  m.insert(0xA3, OpCode::new(0xA3, "*LAX", 2, 6, CycleCalcMode::None, AddressingMode::Indirect_X));
+  // m.insert(0xA3, OpCode::new(0xA3, "*LAX", 2, 6, CycleCalcMode::None, AddressingMode::Indirect_X));
   m.insert(0xB3, OpCode::new(0xB3, "*LAX", 2, 5, CycleCalcMode::Page, AddressingMode::Indirect_Y));
   m.insert(0x1A, OpCode::new(0x1A, "*NOP", 1, 2, CycleCalcMode::None, AddressingMode::Implied));
   m.insert(0x3A, OpCode::new(0x3A, "*NOP", 1, 2, CycleCalcMode::None, AddressingMode::Implied));
@@ -273,6 +273,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
 
   // m.insert(0xB1, OpCode::new(0xB1, "LDA", 2, 5, CycleCalcMode::Page, AddressingMode::Indirect_Y));
   m.insert(0xB1, OpCode::new(0xB1, "LDA", 2, 5, CycleCalcMode::Page, AddressingMode::Direct_Page_Indirect_Indexed_by_Y));
+
+  m.insert(0xB7, OpCode::new(0xB7, "LDA", 2, 6, CycleCalcMode::Page, AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y));
+
+  m.insert(0xA3, OpCode::new(0xA3, "LDA", 2, 4, CycleCalcMode::Page, AddressingMode::Stack_Relative));
   m
 });
 

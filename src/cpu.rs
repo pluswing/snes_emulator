@@ -392,10 +392,27 @@ impl CPU {
                 addr & 0xFFFFFF
             }
             AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
-              todo!("Direct_Page_Indirect_Long_Indexed_by_Y")
+              // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから24bitを読み込み、さらにYレジスタを足したアドレスに目的のデータが格納されています。
+              // ダイレクトインダイレクトロングインデクスXモードはありません。[$12],yのように表します。
+              let addr = self.mem_read(pc);
+              let addr = (self.direct_page as u32).wrapping_add(addr as u32);
+              let addr = addr & 0x00FFFF;
+              let base = self.mem_read_u16(addr);
+              let bank = self.mem_read(addr + 2);
+              let addr = ((bank as u32) << 16) | base as u32;
+              let addr = addr.wrapping_add(self.get_register_y() as u32);
+              addr & 0xFFFFFF
             }
             AddressingMode::Stack_Relative => {
-              todo!("Direct_Page")
+              // アドレス部の内容にスタックポインタを足したアドレスが目的のデータが格納されたアドレスを表します。
+              // スタックポインタは常に次の有効なスタックの空き領域を示しているため、オペランドに1を指定すれば最後にスタックに積まれた値、0を指定すれば最後にスタックからプルされた値を指す。
+              // $01,sのように表します。
+              let value = self.mem_read(pc) as u32;
+              // self.stack_pointer はnative modeかどうかを判断する必要あり。(16 / 8 bit切り替え)
+              // 8bit modeだったら、上位バイトをクリアして、0x0100を足す。
+              let addr = (self.stack_pointer as u32).wrapping_add(value);
+              let addr = 0x0100 + addr;
+              self.mem_read(addr) as u32
             }
             AddressingMode::Stack_Relative_Indirect_Indexed_by_Y => {
               todo!("Stack_Relative_Indirect_Indexed_by_Y")
