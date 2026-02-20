@@ -7,7 +7,6 @@ use crate::opscodes::{call, CPU_OPS_CODES};
 pub enum AddressingMode {
     Accumulator,
     Immediate,
-    ZeroPage_Y,
     Absolute,
     Absolute_Indexed_by_X,
     Absolute_Indexed_by_Y,
@@ -19,7 +18,7 @@ pub enum AddressingMode {
 
     // 65816
     Absolute_Long,
-    Direct_Page, // ZeroPage
+    Direct_Page,
     Direct_Page_Indirect,
     Direct_Page_Indirect_Long,
     Absolute_Long_Indexed_by_X,
@@ -270,13 +269,6 @@ impl CPU {
               addr & 0x00FFFF
             }
 
-            // LDX $44,Y => b6 44
-            AddressingMode::ZeroPage_Y => {
-                let pos = self.mem_read(pc);
-                let addr = pos.wrapping_add(self.register_y as u8) as u16;
-                addr as u32
-            }
-
             // LDA $4400,X => bd 00 44
             AddressingMode::Absolute_Indexed_by_X => {
                 let base = self.mem_read_u16(pc);
@@ -408,14 +400,19 @@ impl CPU {
               // スタックポインタは常に次の有効なスタックの空き領域を示しているため、オペランドに1を指定すれば最後にスタックに積まれた値、0を指定すれば最後にスタックからプルされた値を指す。
               // $01,sのように表します。
               let value = self.mem_read(pc) as u32;
-              // self.stack_pointer はnative modeかどうかを判断する必要あり。(16 / 8 bit切り替え)
-              // 8bit modeだったら、上位バイトをクリアして、0x0100を足す。
               let addr = (self.stack_pointer as u32).wrapping_add(value);
-              let addr = 0x0100 + addr;
-              self.mem_read(addr) as u32
+              addr & 0x00FFFF
             }
             AddressingMode::Stack_Relative_Indirect_Indexed_by_Y => {
-              todo!("Stack_Relative_Indirect_Indexed_by_Y")
+              // アドレス部の内容にスタックポインタを足したアドレスから16bitを読み込み、さらにYレジスタを足したアドレスが目的のデータの格納されているアドレスを表します。
+              // ($01,s),yのように表します。
+              let value = self.mem_read(pc) as u32;
+              let addr = (self.stack_pointer as u32).wrapping_add(value);
+              let addr = addr & 0x00FFFF;
+              let addr = self.mem_read_u16(addr) as u32;
+              let addr = addr.wrapping_add(self.get_register_y() as u32);
+              let addr = ((self.data_bank as u32) << 16).wrapping_add(addr);
+              addr & 0xFFFFFF
             }
 
             AddressingMode::NoneAddressing => {
