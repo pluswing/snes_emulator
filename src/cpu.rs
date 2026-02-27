@@ -33,21 +33,18 @@ pub enum AddressingMode {
     NoneAddressing,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[allow(non_camel_case_types)]
-pub enum CycleCalcMode {
-    None,
-    Page,
-    Branch,
+#[derive(Debug, Clone)]
+pub struct OpInfo {
+    pub bytes: u16,
+    pub cycles: u8,
 }
 
 #[derive(Debug, Clone)]
 pub struct OpCode {
     pub code: u8,
     pub name: String,
-    pub bytes: u16,
-    pub cycles: u8,
-    pub cycle_calc_mode: CycleCalcMode,
+    pub native: OpInfo,
+    pub emunation: OpInfo,
     pub addressing_mode: AddressingMode,
 }
 
