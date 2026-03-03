@@ -44,7 +44,7 @@ pub struct OpCode {
     pub code: u8,
     pub name: String,
     pub native: OpInfo,
-    pub emunation: OpInfo,
+    pub emulation: OpInfo,
     pub addressing_mode: AddressingMode,
 }
 
@@ -52,17 +52,15 @@ impl OpCode {
     pub fn new(
         code: u8,
         name: &str,
-        bytes: u16,
-        cycles: u8,
-        cycle_calc_mode: CycleCalcMode,
+        native: OpInfo,
+        emulation: OpInfo,
         addressing_mode: AddressingMode,
     ) -> Self {
         OpCode {
             code: code,
             name: String::from(name),
-            bytes: bytes,
-            cycles: cycles,
-            cycle_calc_mode: cycle_calc_mode,
+            native,
+            emulation,
             addressing_mode: addressing_mode,
         }
     }
@@ -110,8 +108,6 @@ pub struct CPU {
     pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
     pub memory: Vec<u8>, // size=0xFFFFFF
     // pub bus: Bus<'a>,
-
-    add_cycles: u8,
 }
 
 pub static mut IN_TRACE: bool = false;
@@ -151,7 +147,6 @@ impl CPU {
             mode: MODE_16BIT,
             memory: vec![0; 0x100_0000],
             // bus: bus,
-            add_cycles: 0,
         }
     }
 
@@ -301,10 +296,6 @@ impl CPU {
                 let base = self.mem_read(pc);
                 let deref_base = self.mem_read_u16(base as u32);
                 let deref = deref_base.wrapping_add(self.register_y as u16);
-                // (+1 if page crossed)
-                if deref_base & 0xFF00 != deref & 0xFF00 {
-                    self.add_cycles += 1;
-                }
                 deref as u32
             }
             // ↑ エミュレーションモード(8Bitモード)時のアドレッシングモード
@@ -477,24 +468,8 @@ impl CPU {
         let op = CPU_OPS_CODES.get(&opscode);
         match op {
             Some(op) => {
-                self.add_cycles = 0;
 
                 call(self, &op);
-
-                match op.cycle_calc_mode {
-                    CycleCalcMode::None => {
-                        self.add_cycles = 0;
-                    }
-                    CycleCalcMode::Page => {
-                        if self.add_cycles > 1 {
-                            panic!(
-                                "Unexpected cycle_calc. {} {:?} => {}",
-                                op.name, op.addressing_mode, self.add_cycles
-                            )
-                        }
-                    }
-                    _ => {}
-                }
 
                 // self.bus.tick(op.cycles + self.add_cycles);
 
@@ -530,7 +505,109 @@ impl CPU {
     }
 */
 
-/*
+    pub fn phx(&mut self, mode: &AddressingMode) {
+        todo!("phx")
+    }
+    pub fn ply(&mut self, mode: &AddressingMode) {
+        todo!("ply")
+    }
+    pub fn bra(&mut self, mode: &AddressingMode) {
+        todo!("bra")
+    }
+    pub fn mvp(&mut self, mode: &AddressingMode) {
+        todo!("mvp")
+    }
+    pub fn stz(&mut self, mode: &AddressingMode) {
+        todo!("stz")
+    }
+    pub fn rep(&mut self, mode: &AddressingMode) {
+        todo!("rep")
+    }
+    pub fn pei(&mut self, mode: &AddressingMode) {
+        todo!("pei")
+    }
+    pub fn plx(&mut self, mode: &AddressingMode) {
+        todo!("plx")
+    }
+    pub fn phy(&mut self, mode: &AddressingMode) {
+        todo!("phy")
+    }
+    pub fn wdm(&mut self, mode: &AddressingMode) {
+        todo!("wdm")
+    }
+    pub fn cop(&mut self, mode: &AddressingMode) {
+        todo!("cop")
+    }
+    pub fn brl(&mut self, mode: &AddressingMode) {
+        todo!("brl")
+    }
+    pub fn tdc(&mut self, mode: &AddressingMode) {
+        todo!("tdc")
+    }
+    pub fn phk(&mut self, mode: &AddressingMode) {
+        todo!("phk")
+    }
+    pub fn tcd(&mut self, mode: &AddressingMode) {
+        todo!("tcd")
+    }
+    pub fn stp(&mut self, mode: &AddressingMode) {
+        todo!("stp")
+    }
+    pub fn mvn(&mut self, mode: &AddressingMode) {
+        todo!("mvn")
+    }
+    pub fn xce(&mut self, mode: &AddressingMode) {
+        todo!("xce")
+    }
+    pub fn rtl(&mut self, mode: &AddressingMode) {
+        todo!("rtl")
+    }
+    pub fn sep(&mut self, mode: &AddressingMode) {
+        todo!("sep")
+    }
+    pub fn tsb(&mut self, mode: &AddressingMode) {
+        todo!("tsb")
+    }
+    pub fn pld(&mut self, mode: &AddressingMode) {
+        todo!("pld")
+    }
+    pub fn tcs(&mut self, mode: &AddressingMode) {
+        todo!("tcs")
+    }
+    pub fn xba(&mut self, mode: &AddressingMode) {
+        todo!("xba")
+    }
+    pub fn phd(&mut self, mode: &AddressingMode) {
+        todo!("phd")
+    }
+    pub fn tsc(&mut self, mode: &AddressingMode) {
+        todo!("tsc")
+    }
+    pub fn tyx(&mut self, mode: &AddressingMode) {
+        todo!("tyx")
+    }
+    pub fn pea(&mut self, mode: &AddressingMode) {
+        todo!("pea")
+    }
+    pub fn wai(&mut self, mode: &AddressingMode) {
+        todo!("wai")
+    }
+    pub fn txy(&mut self, mode: &AddressingMode) {
+        todo!("txy")
+    }
+    pub fn trb(&mut self, mode: &AddressingMode) {
+        todo!("trb")
+    }
+    pub fn plb(&mut self, mode: &AddressingMode) {
+        todo!("plb")
+    }
+    pub fn per(&mut self, mode: &AddressingMode) {
+        todo!("per")
+    }
+    pub fn phb(&mut self, mode: &AddressingMode) {
+        todo!("phb")
+    }
+
     pub fn anc(&mut self, mode: &AddressingMode) {
         todo!("anc")
     }
@@ -748,7 +825,7 @@ impl CPU {
         self.register_x = value;
         self.update_zero_and_negative_flags(self.register_x);
     }
-*/
+
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_u16(addr);
@@ -756,7 +833,7 @@ impl CPU {
         let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);
     }
-/*
+
     pub fn rts(&mut self, mode: &AddressingMode) {
         let value = self._pop_u16() + 1;
         self.program_counter = value;
@@ -1145,7 +1222,7 @@ impl CPU {
 
         self.update_zero_and_negative_flags(self.register_a)
     }
-*/
+
     fn update_zero_and_negative_flags(&mut self, result: u16) {
         self.status = if result == 0 {
             self.status | FLAG_ZERO

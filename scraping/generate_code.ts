@@ -53,11 +53,12 @@ const outputHeader = () => {
   console.log(`
 use std::{collections::HashMap};
 use once_cell::sync::Lazy;
-use crate::cpu::{AddressingMode, CPU, CycleCalcMode, FLAG_MEMORY_ACCUMULATOR_MODE, MODE_16BIT, OpCode};
+use crate::cpu::{AddressingMode, CPU, FLAG_MEMORY_ACCUMULATOR_MODE, MODE_16BIT, OpCode, OpInfo};
 `.trim())
 }
 
 const outputOpsDefinition = () => {
+  console.log("")
   console.log(`
 pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   let mut m = HashMap::new();
@@ -118,6 +119,7 @@ const parseClocks = (rawCycles: string): [number, number] => {
 }
 
 const outputCallFunction = () => {
+  console.log("")
   console.log(`
 pub fn call(cpu: &mut CPU, op: &OpCode) {
   match op.name.as_str() {
@@ -129,15 +131,18 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
     console.log(`
   "${opname}" => {
       cpu.${opname.toLowerCase()}(&op.addressing_mode);
-      if cpu.is_native_move() {
+      let bytes = if cpu.is_native_mode() {
+        op.native.bytes
       } else {
-      }
-      cpu.program_counter = cpu.program_counter.wrapping_add(op.bytes - 1);
+        op.emulation.bytes
+      };
+      cpu.program_counter = cpu.program_counter.wrapping_add(bytes - 1);
     }
 `)
   }
     console.log(`
   }
+}
 `)
 }
 

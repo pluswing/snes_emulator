@@ -90,7 +90,7 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      // "a9.e", // LDA Immediate
+      "a9.e", // LDA Immediate
       // "a9.n",
       // "ad.e", // LDA Absolute
       // "ad.n",
