@@ -11,10 +11,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0x84, OpCode::new(0x84, "STY", OpInfo::new(2, 3), OpInfo::new(2, 3), AddressingMode::Direct_Page));
   m.insert(0x94, OpCode::new(0x94, "STY", OpInfo::new(2, 4), OpInfo::new(2, 4), AddressingMode::Direct_Page_Indexed_by_X));
   m.insert(0x50, OpCode::new(0x50, "BVC", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Program_Counter_Relative));
-  m.insert(0x8B, OpCode::new(0x8B, "PHB", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
-  m.insert(0x62, OpCode::new(0x62, "PER", OpInfo::new(3, 6), OpInfo::new(3, 6), AddressingMode::Stack_PC_Relative_Long));
-  m.insert(0xAB, OpCode::new(0xAB, "PLB", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Pull));
-  m.insert(0x40, OpCode::new(0x40, "RTI", OpInfo::new(1, 7), OpInfo::new(1, 7), AddressingMode::Stack_RTI));
+  m.insert(0x8B, OpCode::new(0x8B, "PHB", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
+  m.insert(0x62, OpCode::new(0x62, "PER", OpInfo::new(3, 6), OpInfo::new(3, 6), AddressingMode::Stack));
+  m.insert(0xAB, OpCode::new(0xAB, "PLB", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
+  m.insert(0x40, OpCode::new(0x40, "RTI", OpInfo::new(1, 7), OpInfo::new(1, 7), AddressingMode::Stack));
   m.insert(0x38, OpCode::new(0x38, "SEC", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0x1C, OpCode::new(0x1C, "TRB", OpInfo::new(3, 6), OpInfo::new(3, 6), AddressingMode::Absolute));
   m.insert(0x14, OpCode::new(0x14, "TRB", OpInfo::new(2, 5), OpInfo::new(2, 5), AddressingMode::Direct_Page));
@@ -63,15 +63,15 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0x06, OpCode::new(0x06, "ASL", OpInfo::new(2, 5), OpInfo::new(2, 5), AddressingMode::Direct_Page));
   m.insert(0x1E, OpCode::new(0x1E, "ASL", OpInfo::new(3, 7), OpInfo::new(3, 7), AddressingMode::Absolute_Indexed_by_X));
   m.insert(0x16, OpCode::new(0x16, "ASL", OpInfo::new(2, 6), OpInfo::new(2, 6), AddressingMode::Direct_Page_Indexed_by_X));
-  m.insert(0xF4, OpCode::new(0xF4, "PEA", OpInfo::new(3, 5), OpInfo::new(3, 5), AddressingMode::Stack_absolute));
+  m.insert(0xF4, OpCode::new(0xF4, "PEA", OpInfo::new(3, 5), OpInfo::new(3, 5), AddressingMode::Stack));
   m.insert(0xBB, OpCode::new(0xBB, "TYX", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
-  m.insert(0x28, OpCode::new(0x28, "PLP", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Pull));
+  m.insert(0x28, OpCode::new(0x28, "PLP", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
   m.insert(0xE8, OpCode::new(0xE8, "INX", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0xC0, OpCode::new(0xC0, "CPY", OpInfo::new(3, 2), OpInfo::new(2, 2), AddressingMode::Immediate));
   m.insert(0xCC, OpCode::new(0xCC, "CPY", OpInfo::new(3, 4), OpInfo::new(3, 4), AddressingMode::Absolute));
   m.insert(0xC4, OpCode::new(0xC4, "CPY", OpInfo::new(2, 3), OpInfo::new(2, 3), AddressingMode::Direct_Page));
   m.insert(0x3B, OpCode::new(0x3B, "TSC", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
-  m.insert(0x0B, OpCode::new(0x0B, "PHD", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Push));
+  m.insert(0x0B, OpCode::new(0x0B, "PHD", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
   m.insert(0xF8, OpCode::new(0xF8, "SED", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0xE9, OpCode::new(0xE9, "SBC", OpInfo::new(3, 2), OpInfo::new(2, 2), AddressingMode::Immediate));
   m.insert(0xED, OpCode::new(0xED, "SBC", OpInfo::new(3, 4), OpInfo::new(3, 4), AddressingMode::Absolute));
@@ -123,7 +123,7 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0xBE, OpCode::new(0xBE, "LDX", OpInfo::new(3, 4), OpInfo::new(3, 4), AddressingMode::Absolute_Indexed_by_Y));
   m.insert(0xB6, OpCode::new(0xB6, "LDX", OpInfo::new(2, 4), OpInfo::new(2, 4), AddressingMode::Direct_Page_Indexed_by_Y));
   m.insert(0x9A, OpCode::new(0x9A, "TXS", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
-  m.insert(0x2B, OpCode::new(0x2B, "PLD", OpInfo::new(1, 5), OpInfo::new(1, 5), AddressingMode::Stack_Pull));
+  m.insert(0x2B, OpCode::new(0x2B, "PLD", OpInfo::new(1, 5), OpInfo::new(1, 5), AddressingMode::Stack));
   m.insert(0x09, OpCode::new(0x09, "ORA", OpInfo::new(3, 2), OpInfo::new(2, 2), AddressingMode::Immediate));
   m.insert(0x0D, OpCode::new(0x0D, "ORA", OpInfo::new(3, 4), OpInfo::new(3, 4), AddressingMode::Absolute));
   m.insert(0x0F, OpCode::new(0x0F, "ORA", OpInfo::new(4, 5), OpInfo::new(4, 5), AddressingMode::Absolute_Long));
@@ -159,10 +159,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0xB7, OpCode::new(0xB7, "LDA", OpInfo::new(2, 6), OpInfo::new(2, 6), AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y));
   m.insert(0xA3, OpCode::new(0xA3, "LDA", OpInfo::new(2, 4), OpInfo::new(2, 4), AddressingMode::Stack_Relative));
   m.insert(0xB3, OpCode::new(0xB3, "LDA", OpInfo::new(2, 7), OpInfo::new(2, 7), AddressingMode::Stack_Relative_Indirect_Indexed_by_Y));
-  m.insert(0x08, OpCode::new(0x08, "PHP", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
+  m.insert(0x08, OpCode::new(0x08, "PHP", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
   m.insert(0xC8, OpCode::new(0xC8, "INY", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0xE2, OpCode::new(0xE2, "SEP", OpInfo::new(2, 3), OpInfo::new(2, 3), AddressingMode::Immediate));
-  m.insert(0x6B, OpCode::new(0x6B, "RTL", OpInfo::new(1, 6), OpInfo::new(1, 6), AddressingMode::Stack_RTL));
+  m.insert(0x6B, OpCode::new(0x6B, "RTL", OpInfo::new(1, 6), OpInfo::new(1, 6), AddressingMode::Stack));
   m.insert(0x2A, OpCode::new(0x2A, "ROL", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Accumulator));
   m.insert(0x2E, OpCode::new(0x2E, "ROL", OpInfo::new(3, 6), OpInfo::new(3, 6), AddressingMode::Absolute));
   m.insert(0x26, OpCode::new(0x26, "ROL", OpInfo::new(2, 5), OpInfo::new(2, 5), AddressingMode::Direct_Page));
@@ -202,20 +202,20 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0x54, OpCode::new(0x54, "MVN", OpInfo::new(3, 7), OpInfo::new(3, 7), AddressingMode::Block_Move));
   m.insert(0xDB, OpCode::new(0xDB, "STP", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Implied));
   m.insert(0x5B, OpCode::new(0x5B, "TCD", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
-  m.insert(0x4B, OpCode::new(0x4B, "PHK", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
-  m.insert(0x00, OpCode::new(0x00, "BRK", OpInfo::new(2, 8), OpInfo::new(2, 8), AddressingMode::Stack_Interrupt));
+  m.insert(0x4B, OpCode::new(0x4B, "PHK", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
+  m.insert(0x00, OpCode::new(0x00, "BRK", OpInfo::new(2, 8), OpInfo::new(2, 8), AddressingMode::Stack));
   m.insert(0x7B, OpCode::new(0x7B, "TDC", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0x70, OpCode::new(0x70, "BVS", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Program_Counter_Relative));
   m.insert(0xD8, OpCode::new(0xD8, "CLD", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Implied));
   m.insert(0xF0, OpCode::new(0xF0, "BEQ", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Program_Counter_Relative));
   m.insert(0x82, OpCode::new(0x82, "BRL", OpInfo::new(3, 4), OpInfo::new(3, 4), AddressingMode::Program_Counter_Relative_Long));
-  m.insert(0x02, OpCode::new(0x02, "COP", OpInfo::new(2, 8), OpInfo::new(2, 8), AddressingMode::Stack_Interrupt));
+  m.insert(0x02, OpCode::new(0x02, "COP", OpInfo::new(2, 8), OpInfo::new(2, 8), AddressingMode::Stack));
   m.insert(0x42, OpCode::new(0x42, "WDM", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Implied));
-  m.insert(0x5A, OpCode::new(0x5A, "PHY", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
-  m.insert(0xFA, OpCode::new(0xFA, "PLX", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Pull));
-  m.insert(0x60, OpCode::new(0x60, "RTS", OpInfo::new(1, 6), OpInfo::new(1, 6), AddressingMode::Stack_RTS));
-  m.insert(0xD4, OpCode::new(0xD4, "PEI", OpInfo::new(2, 6), OpInfo::new(2, 6), AddressingMode::Stack_Direct_Page_Indirect));
-  m.insert(0x68, OpCode::new(0x68, "PLA", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Pull));
+  m.insert(0x5A, OpCode::new(0x5A, "PHY", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
+  m.insert(0xFA, OpCode::new(0xFA, "PLX", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
+  m.insert(0x60, OpCode::new(0x60, "RTS", OpInfo::new(1, 6), OpInfo::new(1, 6), AddressingMode::Stack));
+  m.insert(0xD4, OpCode::new(0xD4, "PEI", OpInfo::new(2, 6), OpInfo::new(2, 6), AddressingMode::Stack));
+  m.insert(0x68, OpCode::new(0x68, "PLA", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
   m.insert(0x4A, OpCode::new(0x4A, "LSR", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Accumulator));
   m.insert(0x4E, OpCode::new(0x4E, "LSR", OpInfo::new(3, 6), OpInfo::new(3, 6), AddressingMode::Absolute));
   m.insert(0x46, OpCode::new(0x46, "LSR", OpInfo::new(2, 5), OpInfo::new(2, 5), AddressingMode::Direct_Page));
@@ -249,7 +249,7 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0x64, OpCode::new(0x64, "STZ", OpInfo::new(2, 3), OpInfo::new(2, 3), AddressingMode::Direct_Page));
   m.insert(0x9E, OpCode::new(0x9E, "STZ", OpInfo::new(3, 5), OpInfo::new(3, 5), AddressingMode::Absolute_Indexed_by_X));
   m.insert(0x74, OpCode::new(0x74, "STZ", OpInfo::new(2, 4), OpInfo::new(2, 4), AddressingMode::Direct_Page_Indexed_by_X));
-  m.insert(0x48, OpCode::new(0x48, "PHA", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
+  m.insert(0x48, OpCode::new(0x48, "PHA", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
   m.insert(0x44, OpCode::new(0x44, "MVP", OpInfo::new(3, 7), OpInfo::new(3, 7), AddressingMode::Block_Move));
   m.insert(0x80, OpCode::new(0x80, "BRA", OpInfo::new(2, 3), OpInfo::new(2, 3), AddressingMode::Program_Counter_Relative));
   m.insert(0x6A, OpCode::new(0x6A, "ROR", OpInfo::new(1, 2), OpInfo::new(1, 2), AddressingMode::Accumulator));
@@ -257,11 +257,343 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   m.insert(0x66, OpCode::new(0x66, "ROR", OpInfo::new(2, 5), OpInfo::new(2, 5), AddressingMode::Direct_Page));
   m.insert(0x7E, OpCode::new(0x7E, "ROR", OpInfo::new(3, 7), OpInfo::new(3, 7), AddressingMode::Absolute_Indexed_by_X));
   m.insert(0x76, OpCode::new(0x76, "ROR", OpInfo::new(2, 6), OpInfo::new(2, 6), AddressingMode::Direct_Page_Indexed_by_X));
-  m.insert(0x7A, OpCode::new(0x7A, "PLY", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack_Pull));
-  m.insert(0xDA, OpCode::new(0xDA, "PHX", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack_Push));
+  m.insert(0x7A, OpCode::new(0x7A, "PLY", OpInfo::new(1, 4), OpInfo::new(1, 4), AddressingMode::Stack));
+  m.insert(0xDA, OpCode::new(0xDA, "PHX", OpInfo::new(1, 3), OpInfo::new(1, 3), AddressingMode::Stack));
   m.insert(0x90, OpCode::new(0x90, "BCC", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Program_Counter_Relative));
 m
 });
+/*
+{
+  "Program Counter Relative": {
+    "BNE": true,
+    "BVC": true,
+    "BCS": true,
+    "BMI": true,
+    "BVS": true,
+    "BEQ": true,
+    "BPL": true,
+    "BRA": true,
+    "BCC": true
+  },
+  "Implied (type 1)": {
+    "TXA": true,
+    "TAX": true,
+    "TXY": true,
+    "TAY": true,
+    "TYX": true,
+    "INX": true,
+    "TSC": true,
+    "DEX": true,
+    "XBA": true,
+    "TYA": true,
+    "DEY": true,
+    "TCS": true,
+    "TXS": true,
+    "INY": true,
+    "TSX": true,
+    "TCD": true,
+    "TDC": true
+  },
+  "Absolute": {
+    "STY": true,
+    "TRB": true,
+    "ADC": true,
+    "STX": true,
+    "JMP": true,
+    "STA": true,
+    "ASL": true,
+    "CPY": true,
+    "SBC": true,
+    "LDY": true,
+    "EOR": true,
+    "LDX": true,
+    "ORA": true,
+    "TSB": true,
+    "CPX": true,
+    "LDA": true,
+    "ROL": true,
+    "DEC": true,
+    "JSR": true,
+    "AND": true,
+    "INC": true,
+    "LSR": true,
+    "CMP": true,
+    "BIT": true,
+    "STZ": true,
+    "ROR": true
+  },
+  "Direct Page": {
+    "STY": true,
+    "TRB": true,
+    "ADC": true,
+    "STX": true,
+    "STA": true,
+    "ASL": true,
+    "CPY": true,
+    "SBC": true,
+    "LDY": true,
+    "EOR": true,
+    "LDX": true,
+    "ORA": true,
+    "TSB": true,
+    "CPX": true,
+    "LDA": true,
+    "ROL": true,
+    "DEC": true,
+    "AND": true,
+    "INC": true,
+    "LSR": true,
+    "CMP": true,
+    "BIT": true,
+    "STZ": true,
+    "ROR": true
+  },
+  "Direct Page Indexed by X": {
+    "STY": true,
+    "ADC": true,
+    "STA": true,
+    "ASL": true,
+    "SBC": true,
+    "LDY": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "ROL": true,
+    "DEC": true,
+    "AND": true,
+    "INC": true,
+    "LSR": true,
+    "CMP": true,
+    "BIT": true,
+    "STZ": true,
+    "ROR": true
+  },
+  "Stack (Push)": {
+    "PHB": true,
+    "PHD": true,
+    "PHP": true,
+    "PHK": true,
+    "PHY": true,
+    "PHA": true,
+    "PHX": true
+  },
+  "Stack (PC Relative Long)": {
+    "PER": true
+  },
+  "Stack (Pull)": {
+    "PLB": true,
+    "PLP": true,
+    "PLD": true,
+    "PLX": true,
+    "PLA": true,
+    "PLY": true
+  },
+  "Stack (RTI)": {
+    "RTI": true
+  },
+  "Implied (type 2)": {
+    "SEC": true,
+    "SED": true,
+    "SEI": true,
+    "XCE": true,
+    "CLI": true,
+    "CLD": true,
+    "CLC": true,
+    "CLV": true
+  },
+  "Immediate": {
+    "ADC": true,
+    "CPY": true,
+    "SBC": true,
+    "LDY": true,
+    "EOR": true,
+    "LDX": true,
+    "ORA": true,
+    "CPX": true,
+    "LDA": true,
+    "SEP": true,
+    "AND": true,
+    "CMP": true,
+    "BIT": true,
+    "REP": true
+  },
+  "Absolute Long": {
+    "ADC": true,
+    "JMP": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "JSR": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indirect": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indirect Long": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Absolute Indexed by X": {
+    "ADC": true,
+    "STA": true,
+    "ASL": true,
+    "SBC": true,
+    "LDY": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "ROL": true,
+    "DEC": true,
+    "AND": true,
+    "INC": true,
+    "LSR": true,
+    "CMP": true,
+    "BIT": true,
+    "STZ": true,
+    "ROR": true
+  },
+  "Absolute Long Indexed by X": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Absolute Indexed by Y": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "LDX": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indexed Indirect by X": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indirect Indexed by Y": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indirect Long Indexed by Y": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Stack Relative": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Stack Relative Indirect Indexed by Y": {
+    "ADC": true,
+    "STA": true,
+    "SBC": true,
+    "EOR": true,
+    "ORA": true,
+    "LDA": true,
+    "AND": true,
+    "CMP": true
+  },
+  "Direct Page Indexed by Y": {
+    "STX": true,
+    "LDX": true
+  },
+  "Absolute Indirect": {
+    "JMP": true
+  },
+  "Absolute Indexed Indirect": {
+    "JMP": true,
+    "JSR": true
+  },
+  "Absolute Indirect Long": {
+    "JMP": true
+  },
+  "Implied (type 3)": {
+    "WAI": true,
+    "NOP": true,
+    "STP": true
+  },
+  "Accumulator": {
+    "ASL": true,
+    "ROL": true,
+    "DEC": true,
+    "INC": true,
+    "LSR": true,
+    "ROR": true
+  },
+  "Stack (absolute)": {
+    "PEA": true
+  },
+  "Stack (RTL)": {
+    "RTL": true
+  },
+  "Block Move": {
+    "MVN": true,
+    "MVP": true
+  },
+  "Stack (Interrupt)": {
+    "BRK": true,
+    "COP": true
+  },
+  "Program Counter Relative Long": {
+    "BRL": true
+  },
+  "Implied (type 3)[4]": {
+    "WDM": true
+  },
+  "Stack (RTS)": {
+    "RTS": true
+  },
+  "Stack (Direct Page Indirect)": {
+    "PEI": true
+  }
+}
+*/
 
 
 pub fn call(cpu: &mut CPU, op: &OpCode) {

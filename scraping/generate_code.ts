@@ -10,10 +10,10 @@ const ADDRESSING_MODE_TABLE: {[key: string]: string} = {
   "Absolute": "Absolute",
   "Direct Page": "Direct_Page",
   "Direct Page Indexed by X": "Direct_Page_Indexed_by_X",
-  "Stack (Push)": "Stack_Push",
-  "Stack (PC Relative Long)": "Stack_PC_Relative_Long",
-  "Stack (Pull)": "Stack_Pull",
-  "Stack (RTI)": "Stack_RTI",
+  "Stack (Push)": "Stack",
+  "Stack (PC Relative Long)": "Stack",
+  "Stack (Pull)": "Stack",
+  "Stack (RTI)": "Stack",
   "Implied (type 2)": "Implied",
   "Immediate": "Immediate",
   "Absolute Long": "Absolute_Long",
@@ -33,14 +33,14 @@ const ADDRESSING_MODE_TABLE: {[key: string]: string} = {
   "Absolute Indirect Long": "Absolute_Indirect_Long",
   "Implied (type 3)": "Implied",
   "Accumulator": "Accumulator",
-  "Stack (absolute)": "Stack_absolute",
-  "Stack (RTL)": "Stack_RTL",
+  "Stack (absolute)": "Stack",
+  "Stack (RTL)": "Stack",
   "Block Move": "Block_Move",
-  "Stack (Interrupt)": "Stack_Interrupt",
+  "Stack (Interrupt)": "Stack",
   "Program Counter Relative Long": "Program_Counter_Relative_Long",
   "Implied (type 3)[4]": "Implied",
-  "Stack (RTS)": "Stack_RTS",
-  "Stack (Direct Page Indirect)": "Stack_Direct_Page_Indirect"
+  "Stack (RTS)": "Stack",
+  "Stack (Direct Page Indirect)": "Stack"
 }
 
 const main = () => {
@@ -64,6 +64,7 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   let mut m = HashMap::new();
 `.trim())
   const files = fs.readdirSync("ops")
+  const adressingModes = {}
   for (const file of files) {
     const opname = file.split(".")[0]
     const html = fs.readFileSync(`ops/${file}`).toString()
@@ -86,6 +87,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
         const [emulationClocks, nativeClocks] = parseClocks(clocks)
         const am = ADDRESSING_MODE_TABLE[addressingMode]
         assert(am)
+        if (!adressingModes[addressingMode]) {
+          adressingModes[addressingMode] = {}
+        }
+        adressingModes[addressingMode][opname] = true;
 
         console.log(`  m.insert(0x${opcode}, OpCode::new(0x${opcode}, "${opname}", OpInfo::new(${nativeBytes}, ${nativeClocks}), OpInfo::new(${emulationBytes}, ${emulationClocks}), AddressingMode::${am}));`)
       }
@@ -94,6 +99,10 @@ pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   console.log(`
   m
 });`.trim())
+
+  console.log("/*")
+  console.log(JSON.stringify(adressingModes, null, 2))
+  console.log("*/")
 }
 
 const parseBytes = (rawBytes: string): [number, number] => {

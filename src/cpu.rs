@@ -31,12 +31,27 @@ pub enum AddressingMode {
     Stack_Relative_Indirect_Indexed_by_Y,
 
     NoneAddressing,
+
+    // added
+    Program_Counter_Relative,
+    Program_Counter_Relative_Long,
+    Stack,
+    Block_Move,
 }
 
 #[derive(Debug, Clone)]
 pub struct OpInfo {
     pub bytes: u16,
     pub cycles: u8,
+}
+
+impl OpInfo {
+    pub fn new(bytes: u16, cycles: u8) -> Self {
+        Self {
+            bytes,
+            cycles,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -406,6 +421,9 @@ impl CPU {
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
             }
+            _ => {
+              panic!("mode {:?} is not supported", mode);
+            }
         }
     }
 
@@ -630,6 +648,7 @@ impl CPU {
         // Status flags: N,Z,C
 
         // AND X をアキュムレータに登録し、結果を X レジスタに格納します。 X レジスタからバイトを減算します (ボローなし)。 ステータスフラグ：N、Z、C
+        /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         let (v, overflow) = (self.register_a & self.register_x).overflowing_sub(value);
@@ -640,6 +659,7 @@ impl CPU {
         } else {
             self.status | FLAG_OVERFLOW
         };
+        */
         todo!("sbx")
     }
 
@@ -655,6 +675,7 @@ impl CPU {
         // AND memory with stack pointer, transfer result to accu-mulator, X
         // register and stack pointer.
         // Status flags: N,Z
+        /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         let s = self._pop();
@@ -662,14 +683,17 @@ impl CPU {
         self.register_x = self.register_a;
         self._push(self.register_a);
         self.update_zero_and_negative_flags(self.register_a);
+        */
         todo!("lae")
     }
 
     pub fn shx(&mut self, mode: &AddressingMode) {
         // M =3D X AND HIGH(arg) + 1
+        /*
         let addr = self.get_operand_address(mode);
         let h = ((addr & 0xFF00) >> 8) as u8;
         self.mem_write(addr, (self.register_x & h).wrapping_add(1));
+        */
         todo!("shx")
     }
 
@@ -677,9 +701,11 @@ impl CPU {
         // Y&H into {adr}
         // AND Y register with the high byte of the target address of the argument
         // + 1. Store the result in memory.
+        /*
         let addr = self.get_operand_address(mode);
         let h = ((addr & 0xFF00) >> 8) as u8;
         self.mem_write(addr, (self.register_y & h).wrapping_add(1));
+        */
         todo!("shy")
     }
 
@@ -693,10 +719,12 @@ impl CPU {
     pub fn shs(&mut self, mode: &AddressingMode) {
         // stores A&X into S and A&X&H into {adr}
         // アキュムレータと X レジスタを AND 演算し、結果をスタック ポインタに格納します。次に、スタック ポインタと引数 1 のターゲット アドレスの上位バイトを AND 演算します。結果をメモリに格納します。
+        /*
         self._push(self.register_a & self.register_x);
         let addr = self.get_operand_address(mode);
         let h = ((addr & 0xFF00) >> 8) as u8;
         self.mem_write(addr, self.register_a & self.register_x & h);
+        */
         todo!("shs")
     }
 
@@ -732,8 +760,11 @@ impl CPU {
     }
 
     pub fn sax(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_a & self.register_x);
+      */
+      todo!("sax");
     }
 
     pub fn lax(&mut self, mode: &AddressingMode) {
