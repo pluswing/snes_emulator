@@ -140,7 +140,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
     console.log(`
   "${opname}" => {
       cpu.${opname.toLowerCase()}(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -150,6 +150,9 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 `)
   }
     console.log(`
+  &_ => {
+    todo!("OP: {} not defined!", op.name);
+  }
   }
 }
 `)

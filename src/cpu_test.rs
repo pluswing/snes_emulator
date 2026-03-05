@@ -90,7 +90,7 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      "a9.e", // LDA Immediate
+      // "a9.e", // LDA Immediate
       // "a9.n",
       // "ad.e", // LDA Absolute
       // "ad.n",
@@ -120,6 +120,8 @@ fn main() {
       // "a3.n",
       // "b3.e", // LDA Stack Relative Indirect Indexed by Y
       // "b3.n",
+      "aa.e",
+      "aa.n",
     ];
 
     for target in targets {

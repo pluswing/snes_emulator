@@ -598,11 +598,11 @@ m
 
 pub fn call(cpu: &mut CPU, op: &OpCode) {
   match op.name.as_str() {
-
+    
 
   "BNE" => {
       cpu.bne(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -613,7 +613,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TXA" => {
       cpu.txa(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -624,7 +624,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TAX" => {
       cpu.tax(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -635,7 +635,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "STY" => {
       cpu.sty(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -646,7 +646,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BVC" => {
       cpu.bvc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -657,7 +657,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHB" => {
       cpu.phb(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -668,7 +668,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PER" => {
       cpu.per(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -679,7 +679,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLB" => {
       cpu.plb(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -690,7 +690,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "RTI" => {
       cpu.rti(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -701,7 +701,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "SEC" => {
       cpu.sec(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -712,7 +712,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TRB" => {
       cpu.trb(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -723,7 +723,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "ADC" => {
       cpu.adc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -734,7 +734,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "STX" => {
       cpu.stx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -745,7 +745,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TXY" => {
       cpu.txy(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -756,7 +756,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "JMP" => {
       cpu.jmp(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -767,7 +767,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "WAI" => {
       cpu.wai(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -778,7 +778,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "STA" => {
       cpu.sta(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -789,7 +789,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TAY" => {
       cpu.tay(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -800,7 +800,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "ASL" => {
       cpu.asl(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -811,7 +811,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PEA" => {
       cpu.pea(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -822,7 +822,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TYX" => {
       cpu.tyx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -833,7 +833,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLP" => {
       cpu.plp(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -844,7 +844,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "INX" => {
       cpu.inx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -855,7 +855,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CPY" => {
       cpu.cpy(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -866,7 +866,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TSC" => {
       cpu.tsc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -877,7 +877,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHD" => {
       cpu.phd(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -888,7 +888,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "SED" => {
       cpu.sed(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -899,7 +899,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "SBC" => {
       cpu.sbc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -910,7 +910,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BCS" => {
       cpu.bcs(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -921,7 +921,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LDY" => {
       cpu.ldy(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -932,7 +932,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "DEX" => {
       cpu.dex(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -943,7 +943,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "EOR" => {
       cpu.eor(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -954,7 +954,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BMI" => {
       cpu.bmi(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -965,7 +965,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "XBA" => {
       cpu.xba(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -976,7 +976,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "NOP" => {
       cpu.nop(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -987,7 +987,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TYA" => {
       cpu.tya(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -998,7 +998,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "SEI" => {
       cpu.sei(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1009,7 +1009,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "DEY" => {
       cpu.dey(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1020,7 +1020,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TCS" => {
       cpu.tcs(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1031,7 +1031,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LDX" => {
       cpu.ldx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1042,7 +1042,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TXS" => {
       cpu.txs(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1053,7 +1053,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLD" => {
       cpu.pld(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1064,7 +1064,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "ORA" => {
       cpu.ora(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1075,7 +1075,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TSB" => {
       cpu.tsb(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1086,7 +1086,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CPX" => {
       cpu.cpx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1097,7 +1097,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LDA" => {
       cpu.lda(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1108,7 +1108,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHP" => {
       cpu.php(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1119,7 +1119,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "INY" => {
       cpu.iny(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1130,7 +1130,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "SEP" => {
       cpu.sep(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1141,7 +1141,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "RTL" => {
       cpu.rtl(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1152,7 +1152,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "ROL" => {
       cpu.rol(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1163,7 +1163,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "DEC" => {
       cpu.dec(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1174,7 +1174,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "JSR" => {
       cpu.jsr(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1185,7 +1185,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "AND" => {
       cpu.and(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1196,7 +1196,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "XCE" => {
       cpu.xce(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1207,7 +1207,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "INC" => {
       cpu.inc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1218,7 +1218,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CLI" => {
       cpu.cli(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1229,7 +1229,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TSX" => {
       cpu.tsx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1240,7 +1240,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "MVN" => {
       cpu.mvn(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1251,7 +1251,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "STP" => {
       cpu.stp(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1262,7 +1262,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TCD" => {
       cpu.tcd(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1273,7 +1273,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHK" => {
       cpu.phk(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1284,7 +1284,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BRK" => {
       cpu.brk(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1295,7 +1295,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "TDC" => {
       cpu.tdc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1306,7 +1306,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BVS" => {
       cpu.bvs(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1317,7 +1317,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CLD" => {
       cpu.cld(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1328,7 +1328,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BEQ" => {
       cpu.beq(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1339,7 +1339,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BRL" => {
       cpu.brl(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1350,7 +1350,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "COP" => {
       cpu.cop(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1361,7 +1361,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "WDM" => {
       cpu.wdm(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1372,7 +1372,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHY" => {
       cpu.phy(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1383,7 +1383,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLX" => {
       cpu.plx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1394,7 +1394,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "RTS" => {
       cpu.rts(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1405,7 +1405,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PEI" => {
       cpu.pei(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1416,7 +1416,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLA" => {
       cpu.pla(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1427,7 +1427,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LSR" => {
       cpu.lsr(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1438,7 +1438,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CLC" => {
       cpu.clc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1449,7 +1449,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CLV" => {
       cpu.clv(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1460,7 +1460,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BPL" => {
       cpu.bpl(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1471,7 +1471,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CMP" => {
       cpu.cmp(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1482,7 +1482,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BIT" => {
       cpu.bit(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1493,7 +1493,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "REP" => {
       cpu.rep(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1504,7 +1504,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "STZ" => {
       cpu.stz(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1515,7 +1515,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHA" => {
       cpu.pha(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1526,7 +1526,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "MVP" => {
       cpu.mvp(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1537,7 +1537,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BRA" => {
       cpu.bra(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1548,7 +1548,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "ROR" => {
       cpu.ror(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1559,7 +1559,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PLY" => {
       cpu.ply(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1570,7 +1570,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "PHX" => {
       cpu.phx(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1581,7 +1581,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "BCC" => {
       cpu.bcc(&op.addressing_mode);
-      let bytes = if cpu.is_native_mode() {
+      let bytes = if cpu.is_accumulator_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1590,6 +1590,9 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
     }
 
 
+  &_ => {
+    todo!("OP: {} not defined!", op.name);
+  }
   }
 }
 

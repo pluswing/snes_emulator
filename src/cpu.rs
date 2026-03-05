@@ -37,6 +37,11 @@ pub enum AddressingMode {
     Program_Counter_Relative_Long,
     Stack,
     Block_Move,
+
+    // TODO ??
+    Absolute_Indirect,
+    Absolute_Indexed_Indirect,
+    Absolute_Indirect_Long
 }
 
 #[derive(Debug, Clone)]
@@ -177,7 +182,7 @@ impl CPU {
       !self.is_native_mode()
     }
 
-    fn is_accumulator_16bit_mode(&self) -> bool {
+    pub fn is_accumulator_16bit_mode(&self) -> bool {
       self.is_native_mode() && (self.status & FLAG_MEMORY_ACCUMULATOR_MODE) == MODE_16BIT
     }
 
@@ -280,7 +285,7 @@ impl CPU {
             AddressingMode::Absolute_Indexed_by_X => {
                 let base = self.mem_read_u16(pc);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
-                let addr = addr.wrapping_add(self.register_x as u32);
+                let addr = addr.wrapping_add(self.get_register_x() as u32);
                 addr & 0xFFFFFF
             }
 
@@ -288,7 +293,7 @@ impl CPU {
             AddressingMode::Absolute_Indexed_by_Y => {
                 let base = self.mem_read_u16(pc);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
-                let addr = addr.wrapping_add(self.register_y as u32);
+                let addr = addr.wrapping_add(self.get_register_y() as u32);
                 addr & 0xFFFFFF
             }
             // JMP -> same Absolute
@@ -301,7 +306,7 @@ impl CPU {
             // LDA ($44,X) => a1 44
             AddressingMode::Indirect_X => {
                 let base = self.mem_read(pc);
-                let ptr: u8 = (base as u8).wrapping_add(self.register_x as u8);
+                let ptr: u8 = (base as u8).wrapping_add(self.get_register_x() as u8);
                 let addr = self.mem_read_u16(ptr as u32);
                 addr as u32
             }
@@ -310,7 +315,7 @@ impl CPU {
             AddressingMode::Indirect_Y => {
                 let base = self.mem_read(pc);
                 let deref_base = self.mem_read_u16(base as u32);
-                let deref = deref_base.wrapping_add(self.register_y as u16);
+                let deref = deref_base.wrapping_add(self.get_register_y() as u16);
                 deref as u32
             }
             // ↑ エミュレーションモード(8Bitモード)時のアドレッシングモード
@@ -348,7 +353,7 @@ impl CPU {
             AddressingMode::Direct_Page_Indexed_by_Y => {
               let addr = self.mem_read(pc);
               let addr = self.direct_page.wrapping_add(addr as u16) as u32;
-              addr.wrapping_add(self.register_y as u32)
+              addr.wrapping_add(self.get_register_y() as u32)
             }
             // LDA (dp, X) => A1 dp
             AddressingMode::Direct_Page_Indexed_Indirect_by_X => {
@@ -383,7 +388,7 @@ impl CPU {
                 let base = self.mem_read_u16(pc);
                 let bank = self.mem_read(pc + 2);
                 let addr = ((bank as u32) << 16) | base as u32;
-                let addr = addr.wrapping_add(self.register_x as u32);
+                let addr = addr.wrapping_add(self.get_register_x() as u32);
                 addr & 0xFFFFFF
             }
             AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
@@ -797,23 +802,34 @@ impl CPU {
     }
 
     pub fn tax(&mut self, mode: &AddressingMode) {
-        self.register_x = self.register_a;
-        self.update_zero_and_negative_flags(self.register_x);
+        let a = self.get_register_a();
+        self.set_register_x(a);
+        let x = self.get_register_x();
+        self.update_zero_and_negative_flags_xy(x);
     }
 
     pub fn sty(&mut self, mode: &AddressingMode) {
-        let addr = self.get_operand_address(mode);
+      /*
+      let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_y);
+      */
+      todo!("sty");
     }
 
     pub fn stx(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_x);
+      */
+      todo!("stx");
     }
 
     pub fn sta(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_a);
+      */
+      todo!("sta");
     }
 
     pub fn rti(&mut self, mode: &AddressingMode) {
@@ -831,12 +847,18 @@ impl CPU {
     }
 
     pub fn pla(&mut self, mode: &AddressingMode) {
+      /*
         self.register_a = self._pop();
         self.update_zero_and_negative_flags(self.register_a);
+      */
+      todo!("pla");
     }
 
     pub fn pha(&mut self, mode: &AddressingMode) {
+      /*
         self._push(self.register_a);
+      */
+      todo!("pha");
     }
 
     pub fn nop(&mut self, mode: &AddressingMode) {
@@ -844,17 +866,23 @@ impl CPU {
     }
 
     pub fn ldy(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_y = value;
         self.update_zero_and_negative_flags(self.register_y);
+      */
+      todo!("ldy");
     }
 
     pub fn ldx(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_x = value;
         self.update_zero_and_negative_flags(self.register_x);
+      */
+      todo!("ldx");
     }
 
     pub fn lda(&mut self, mode: &AddressingMode) {
@@ -871,25 +899,35 @@ impl CPU {
     }
 
     pub fn jsr(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         self._push_u16(self.program_counter + 2 - 1);
         self.program_counter = addr;
         // 後で+2するので整合性のため-2しておく
         self.program_counter -= 2;
+      */
+      todo!("jsr");
     }
 
     pub fn _push(&mut self, value: u8) {
+      /*
         let addr = 0x0100 + self.stack_pointer as u16;
         trace!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
         self.mem_write(addr, value);
         self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+      */
+      todo!("_push");
     }
 
     pub fn _pop(&mut self) -> u8 {
+      /*
         self.stack_pointer = self.stack_pointer.wrapping_add(1);
         let addr = 0x0100 + self.stack_pointer as u16;
         trace!("STACK POP: {:02X}", self.stack_pointer);
         self.mem_read(addr)
+      */
+      todo!("_pop");
+      0
     }
 
     pub fn _push_u16(&mut self, value: u16) {
@@ -904,12 +942,15 @@ impl CPU {
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         self.program_counter = addr;
         // 後で+2するので整合性のため-2しておく
         self.program_counter -= 2;
         // TODO
         // オリジナルの 6502 は、間接ベクトルがページ境界にある場合、ターゲット アドレスを正しくフェッチしません (たとえば、$xxFF で、xx は $00 から $FF までの任意の値です)。この場合、予想どおり $xxFF から LSB を取得しますが、$xx00 から MSB を取得します。これは、65SC02 などの最近のチップで修正されているため、互換性のために、間接ベクトルがページの最後にないことを常に確認してください。
+      */
+      todo!("jmp");
     }
 
     pub fn iny(&mut self, mode: &AddressingMode) {
@@ -923,10 +964,13 @@ impl CPU {
     }
 
     pub fn inc(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr).wrapping_add(1);
         self.mem_write(addr, value);
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("inc");
     }
 
     pub fn dey(&mut self, mode: &AddressingMode) {
@@ -940,13 +984,17 @@ impl CPU {
     }
 
     pub fn dec(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr).wrapping_sub(1);
         self.mem_write(addr, value);
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("dec");
     }
 
     fn _cmp(&mut self, target: u8, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         if target >= value {
@@ -956,18 +1004,29 @@ impl CPU {
         }
         let value = target.wrapping_sub(value);
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("_cmp");
     }
 
     pub fn cpy(&mut self, mode: &AddressingMode) {
+      /*
         self._cmp(self.register_y, mode);
+      */
+      todo!("cpy");
     }
 
     pub fn cpx(&mut self, mode: &AddressingMode) {
+      /*
         self._cmp(self.register_x, mode);
+      */
+      todo!("cpx");
     }
 
     pub fn cmp(&mut self, mode: &AddressingMode) {
+      /*
         self._cmp(self.register_a, mode);
+      */
+      todo!("cmp");
     }
 
     pub fn clv(&mut self, mode: &AddressingMode) {
@@ -1007,6 +1066,7 @@ impl CPU {
     }
 
     fn _branch(&mut self, mode: &AddressingMode, flag: u8, nonzero: bool) {
+      /*
         let addr = self.get_operand_address(mode);
         if nonzero {
             if self.status & flag != 0 {
@@ -1031,6 +1091,8 @@ impl CPU {
                 self.program_counter = addr
             }
         }
+      */
+      todo!("_branch");
     }
 
     pub fn brk(&mut self, mode: &AddressingMode) {
@@ -1057,6 +1119,7 @@ impl CPU {
     }
 
     pub fn bit(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
@@ -1068,6 +1131,8 @@ impl CPU {
         }
         let flags = FLAG_NEGATIVE | FLAG_OVERFLOW;
         self.status = (self.status & !flags) | (value & flags);
+      */
+      todo!("bit");
     }
 
     pub fn bne(&mut self, mode: &AddressingMode) {
@@ -1087,7 +1152,8 @@ impl CPU {
     }
 
     pub fn ror(&mut self, mode: &AddressingMode) {
-        let (value, carry) = if mode == &AddressingMode::Accumulator {
+      /*
+      let (value, carry) = if mode == &AddressingMode::Accumulator {
             let carry = self.register_a & 0x01;
             self.register_a = self.register_a / 2;
             self.register_a = self.register_a | ((self.status & FLAG_CARRY) << 7);
@@ -1108,9 +1174,12 @@ impl CPU {
             self.status & !FLAG_CARRY
         };
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("ror");
     }
 
     pub fn rol(&mut self, mode: &AddressingMode) {
+      /*
         let (value, carry) = if mode == &AddressingMode::Accumulator {
             let (value, carry) = self.register_a.overflowing_mul(2);
             self.register_a = value | (self.status & FLAG_CARRY);
@@ -1130,9 +1199,12 @@ impl CPU {
             self.status & !FLAG_CARRY
         };
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("rol");
     }
 
     pub fn lsr(&mut self, mode: &AddressingMode) {
+      /*
         let (value, carry) = if mode == &AddressingMode::Accumulator {
             let carry = self.register_a & 0x01;
             self.register_a = self.register_a / 2;
@@ -1152,9 +1224,12 @@ impl CPU {
             self.status & !FLAG_CARRY
         };
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("lsr");
     }
 
     pub fn asl(&mut self, mode: &AddressingMode) {
+      /*
         let (value, carry) = if mode == &AddressingMode::Accumulator {
             let (value, carry) = self.register_a.overflowing_mul(2);
             self.register_a = value;
@@ -1173,30 +1248,42 @@ impl CPU {
             self.status & !FLAG_CARRY
         };
         self.update_zero_and_negative_flags(value);
+      */
+      todo!("asl");
     }
 
     pub fn ora(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a = self.register_a | value;
         self.update_zero_and_negative_flags(self.register_a);
+      */
+      todo!("ora");
     }
 
     pub fn eor(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a = self.register_a ^ value;
         self.update_zero_and_negative_flags(self.register_a);
+      */
+      todo!("eor");
     }
 
     pub fn and(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a = self.register_a & value;
         self.update_zero_and_negative_flags(self.register_a);
+      */
+      todo!("and");
     }
 
     pub fn sbc(&mut self, mode: &AddressingMode) {
+      /*
         // A-M-(1-C)
         // キャリーかどうかの判定が逆
         // キャリーの引き算(1-C)
@@ -1225,9 +1312,12 @@ impl CPU {
         };
 
         self.update_zero_and_negative_flags(self.register_a)
+      */
+      todo!("sbc");
     }
 
     pub fn adc(&mut self, mode: &AddressingMode) {
+      /*
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
 
@@ -1252,6 +1342,8 @@ impl CPU {
         };
 
         self.update_zero_and_negative_flags(self.register_a)
+      */
+      todo!("adc");
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
@@ -1262,6 +1354,22 @@ impl CPU {
         };
 
         let test_bit = if self.is_accumulator_16bit_mode() { 0x8000 } else { 0x0080 };
+        self.status = if (result & test_bit) != 0 {
+            self.status | FLAG_NEGATIVE
+        } else {
+            self.status & !FLAG_NEGATIVE
+        }
+    }
+
+    fn update_zero_and_negative_flags_xy(&mut self, result: u16) {
+        self.status = if result == 0 {
+            self.status | FLAG_ZERO
+        } else {
+            self.status & !FLAG_ZERO
+        };
+
+        let test_bit = if self.is_index_register_16bit_mode() { 0x8000 } else { 0x0080 };
+        println!("TESTBIT: {:04X}", test_bit);
         self.status = if (result & test_bit) != 0 {
             self.status | FLAG_NEGATIVE
         } else {
