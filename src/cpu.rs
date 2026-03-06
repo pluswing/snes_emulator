@@ -802,8 +802,13 @@ impl CPU {
     }
 
     pub fn tax(&mut self, mode: &AddressingMode) {
-        let a = self.get_register_a();
-        self.set_register_x(a);
+        if !self.is_accumulator_16bit_mode() && self.is_index_register_16bit_mode() {
+          // この場合は、16bit転送になる。
+          self.register_x = self.register_a;
+        } else {
+          let a = self.get_register_a();
+          self.set_register_x(a);
+        }
         let x = self.get_register_x();
         self.update_zero_and_negative_flags_xy(x);
     }
@@ -959,8 +964,10 @@ impl CPU {
     }
 
     pub fn inx(&mut self, mode: &AddressingMode) {
-        self.register_x = self.register_x.wrapping_add(1);
-        self.update_zero_and_negative_flags(self.register_x);
+        let x = self.get_register_x();
+        self.set_register_x(x.wrapping_add(1));
+        let x = self.get_register_x();
+        self.update_zero_and_negative_flags_xy(x);
     }
 
     pub fn inc(&mut self, mode: &AddressingMode) {
@@ -1253,13 +1260,11 @@ impl CPU {
     }
 
     pub fn ora(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
-        self.register_a = self.register_a | value;
-        self.update_zero_and_negative_flags(self.register_a);
-      */
-      todo!("ora");
+        let value: u16 = self.mem_read_u16(addr);
+        let a = self.get_register_a() | value;
+        self.set_register_a(a);
+        self.update_zero_and_negative_flags(a);
     }
 
     pub fn eor(&mut self, mode: &AddressingMode) {
@@ -1347,29 +1352,26 @@ impl CPU {
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
-        self.status = if result == 0 {
-            self.status | FLAG_ZERO
-        } else {
-            self.status & !FLAG_ZERO
-        };
-
-        let test_bit = if self.is_accumulator_16bit_mode() { 0x8000 } else { 0x0080 };
-        self.status = if (result & test_bit) != 0 {
-            self.status | FLAG_NEGATIVE
-        } else {
-            self.status & !FLAG_NEGATIVE
-        }
+        self._update_zero_and_negative_flags(result, true);
     }
 
     fn update_zero_and_negative_flags_xy(&mut self, result: u16) {
+        self._update_zero_and_negative_flags(result, false);
+    }
+
+    fn _update_zero_and_negative_flags(&mut self, result: u16, mode_a: bool) {
         self.status = if result == 0 {
             self.status | FLAG_ZERO
         } else {
             self.status & !FLAG_ZERO
         };
+        let mode = if mode_a {
+          self.is_accumulator_16bit_mode()
+        } else {
+          self.is_index_register_16bit_mode()
+        };
 
-        let test_bit = if self.is_index_register_16bit_mode() { 0x8000 } else { 0x0080 };
-        println!("TESTBIT: {:04X}", test_bit);
+        let test_bit = if mode { 0x8000 } else { 0x0080 };
         self.status = if (result & test_bit) != 0 {
             self.status | FLAG_NEGATIVE
         } else {

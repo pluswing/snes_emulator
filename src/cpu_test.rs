@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use std::fmt;
 
 use crate::cpu::CPU;
+use crate::opscodes::CPU_OPS_CODES;
 
 mod cpu;
 mod opscodes;
@@ -120,9 +121,14 @@ fn main() {
       // "a3.n",
       // "b3.e", // LDA Stack Relative Indirect Indexed by Y
       // "b3.n",
-      "aa.e",
-      "aa.n",
+      // "aa.e", // TAX
+      // "aa.n",
+      // "e8.e", // INX
+      // "e8.n",
+      "09.e",
+      "09.n"
     ];
+    // testcase("ORA")
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -177,3 +183,12 @@ fn main() {
 
     println!("OK!");
 }
+
+// fn testcase(op: str) -> [str] {
+  // for let o in CPU_OPS_CODES {
+  //   o.name == op
+  // }
+  // format!("{02X}", o.code)
+  // ".e", ".n"
+  // // return to list
+// }
