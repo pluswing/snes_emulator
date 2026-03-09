@@ -398,9 +398,15 @@ impl CPU {
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
               let base = self.mem_read_u16(addr);
-              let bank = self.mem_read(addr + 2);
+              let bank = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                let addr = addr & 0xFF00 | (addr + 2) & 0x00FF;
+                self.mem_read(addr)
+              } else {
+                self.mem_read(addr + 2)
+              };
               let addr = ((bank as u32) << 16) | base as u32;
-              let addr = addr.wrapping_add(self.get_register_y() as u32);
+              let addr: u32 = addr.wrapping_add(self.get_register_y() as u32);
+              // println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
               addr & 0xFFFFFF
             }
             AddressingMode::Stack_Relative => {

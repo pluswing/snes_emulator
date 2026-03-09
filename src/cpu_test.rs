@@ -125,10 +125,10 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "e8.n",
-      "09.e",
-      "09.n"
+      "17.e",
+      "17.n"
     ];
-    // testcase("ORA")
+    let targets = testcase("ORA");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -184,11 +184,15 @@ fn main() {
     println!("OK!");
 }
 
-// fn testcase(op: str) -> [str] {
-  // for let o in CPU_OPS_CODES {
-  //   o.name == op
-  // }
-  // format!("{02X}", o.code)
-  // ".e", ".n"
-  // // return to list
-// }
+fn testcase(op: &str) -> Vec<String> {
+  let mut ret: Vec<String> = vec![];
+  for (key, value) in CPU_OPS_CODES.iter() {
+    if value.name == op {
+      let e = format!("{:02X}.e", value.code);
+      ret.push(e);
+      let n = format!("{:02X}.n", value.code);
+      ret.push(n);
+    }
+  }
+  return ret;
+}
