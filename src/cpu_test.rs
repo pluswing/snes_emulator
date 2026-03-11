@@ -125,10 +125,10 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "e8.n",
-      "17.e",
-      "17.n"
+      "19.e",
+      "19.n"
     ];
-    let targets = testcase("ORA");
+    let targets = testcase("AND");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");

@@ -283,15 +283,18 @@ impl CPU {
 
             // LDA $4400,X => bd 00 44
             AddressingMode::Absolute_Indexed_by_X => {
-                let base = self.mem_read_u16(pc);
+                let base = self.wrapped_mem_read_u16(pc);
+                // println!("BASE {:06X}", base);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
+                // println!("+DBR {:06X}", addr);
                 let addr = addr.wrapping_add(self.get_register_x() as u32);
+                // println!("+X {:06X}", addr);
                 addr & 0xFFFFFF
             }
 
             // LDA $4400,Y => b9 00 44
             AddressingMode::Absolute_Indexed_by_Y => {
-                let base = self.mem_read_u16(pc);
+                let base = self.wrapped_mem_read_u16(pc);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.get_register_y() as u32);
                 addr & 0xFFFFFF
@@ -441,6 +444,12 @@ impl CPU {
     pub fn mem_read_u16(&mut self, pos: u32) -> u16 {
         let lo = self.mem_read(pos) as u16;
         let hi = self.mem_read(pos + 1) as u16;
+        (hi << 8) | (lo as u16)
+    }
+
+    pub fn wrapped_mem_read_u16(&mut self, pos: u32) -> u16 {
+        let lo = self.mem_read(pos) as u16;
+        let hi = self.mem_read((pos & 0xFF0000) | ((pos + 1) & 0x00FFFF))  as u16;
         (hi << 8) | (lo as u16)
     }
 
@@ -1284,13 +1293,11 @@ impl CPU {
     }
 
     pub fn and(&mut self, mode: &AddressingMode) {
-      /*
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
-        self.register_a = self.register_a & value;
-        self.update_zero_and_negative_flags(self.register_a);
-      */
-      todo!("and");
+      let addr = self.get_operand_address(mode);
+      let value = self.mem_read(addr);
+      let value = self.get_register_a() & (value as u16);
+      self.set_register_a(value);
+      self.update_zero_and_negative_flags(value);
     }
 
     pub fn sbc(&mut self, mode: &AddressingMode) {
