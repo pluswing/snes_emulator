@@ -1,7 +1,7 @@
 # snes_emulator
 
-✅ ADC
-AND
+ADC
+✅ AND
 ASL
 BCC
 BCS
@@ -39,7 +39,7 @@ LSR
 MVN
 MVP
 NOP
-ORA
+✅ ORA
 PEA
 PEI
 PER

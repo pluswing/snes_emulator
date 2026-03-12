@@ -125,8 +125,8 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "e8.n",
-      "19.e",
-      "19.n"
+      "27.e",
+      "27.n"
     ];
     let targets = testcase("AND");
 

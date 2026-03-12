@@ -8,40 +8,40 @@ pub enum AddressingMode {
     Accumulator,
     Immediate,
     Absolute,
-    Absolute_Indexed_by_X,
-    Absolute_Indexed_by_Y,
+    Absolute_Indexed_by_X, // Absolute Indexed by X
+    Absolute_Indexed_by_Y, // Absolute Indexed by Y
     Indirect,
-    Indirect_X,
-    Indirect_Y,
+    Indirect_X, // Indirect X
+    Indirect_Y, // Indirect Y
     Relative,
     Implied,
 
     // 65816
-    Absolute_Long,
-    Direct_Page,
-    Direct_Page_Indirect,
-    Direct_Page_Indirect_Long,
-    Absolute_Long_Indexed_by_X,
-    Direct_Page_Indexed_by_X,
-    Direct_Page_Indexed_by_Y,
-    Direct_Page_Indexed_Indirect_by_X,
-    Direct_Page_Indirect_Indexed_by_Y,
-    Direct_Page_Indirect_Long_Indexed_by_Y,
-    Stack_Relative,
-    Stack_Relative_Indirect_Indexed_by_Y,
+    Absolute_Long, // Absolute Long
+    Direct_Page, // Direct Page
+    Direct_Page_Indirect, // Direct Page Indirect
+    Direct_Page_Indirect_Long, // Direct Page Indirect Long
+    Absolute_Long_Indexed_by_X, // Absolute Long Indexed by X
+    Direct_Page_Indexed_by_X, // Direct Page Indexed by X
+    Direct_Page_Indexed_by_Y, // Direct Page Indexed by Y
+    Direct_Page_Indexed_Indirect_by_X, // Direct Page Indexed Indirect by X
+    Direct_Page_Indirect_Indexed_by_Y, // Direct Page Indirect Indexed by Y
+    Direct_Page_Indirect_Long_Indexed_by_Y, // Direct Page Indirect Long Indexed by Y
+    Stack_Relative, // Stack Relative
+    Stack_Relative_Indirect_Indexed_by_Y, // Stack Relative Indirect Indexed by Y
 
     NoneAddressing,
 
     // added
-    Program_Counter_Relative,
-    Program_Counter_Relative_Long,
+    Program_Counter_Relative, // Program Counter Relative
+    Program_Counter_Relative_Long, // Program Counter Relative Long
     Stack,
-    Block_Move,
+    Block_Move, // Block Move
 
     // TODO ??
-    Absolute_Indirect,
-    Absolute_Indexed_Indirect,
-    Absolute_Indirect_Long
+    Absolute_Indirect, // Absolute Indirect
+    Absolute_Indexed_Indirect, // Absolute Indexed Indirect
+    Absolute_Indirect_Long // Absolute Indirect Long
 }
 
 #[derive(Debug, Clone)]
@@ -348,7 +348,7 @@ impl CPU {
             AddressingMode::Direct_Page_Indirect_Long => {
               let base = self.mem_read(pc) as u32;
               let base = (self.direct_page as u32).wrapping_add(base) & 0x00FFFF;
-              let addr = self.mem_read_u16(base) as u32;
+              let addr = self.wrapped_mem_read_u16(base) as u32;
               let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
             }
@@ -389,7 +389,7 @@ impl CPU {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
                 // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
                 let base = self.mem_read_u16(pc);
-                let bank = self.mem_read(pc + 2);
+                let bank = self.mem_read((pc & 0xFF0000) | ((pc + 2) & 0x00FFFF));
                 let addr = ((bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.get_register_x() as u32);
                 addr & 0xFFFFFF
@@ -400,16 +400,16 @@ impl CPU {
               let addr = self.mem_read(pc);
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
-              let base = self.mem_read_u16(addr);
+              let base = self.wrapped_mem_read_u16(addr);
               let bank = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
                 let addr = addr & 0xFF00 | (addr + 2) & 0x00FF;
                 self.mem_read(addr)
               } else {
-                self.mem_read(addr + 2)
+                self.mem_read((addr + 2) & 0xFFFF)
               };
               let addr = ((bank as u32) << 16) | base as u32;
               let addr: u32 = addr.wrapping_add(self.get_register_y() as u32);
-              // println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
+              println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
               addr & 0xFFFFFF
             }
             AddressingMode::Stack_Relative => {
@@ -429,6 +429,7 @@ impl CPU {
               let addr = self.mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               let addr = ((self.data_bank as u32) << 16).wrapping_add(addr);
+              // println!("ADDR: {:06X}", addr);
               addr & 0xFFFFFF
             }
 
@@ -1294,8 +1295,8 @@ impl CPU {
 
     pub fn and(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
-      let value = self.mem_read(addr);
-      let value = self.get_register_a() & (value as u16);
+      let value = self.mem_read_u16(addr);
+      let value = self.get_register_a() & value;
       self.set_register_a(value);
       self.update_zero_and_negative_flags(value);
     }
@@ -1335,18 +1336,19 @@ impl CPU {
     }
 
     pub fn adc(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+        let value = self.mem_read_u16(addr);
 
-        let carry = self.status & FLAG_CARRY;
+        let carry = (self.status & FLAG_CARRY) as u16;
         let (rhs, carry_flag1) = value.overflowing_add(carry);
-        let (n, carry_flag2) = self.register_a.overflowing_add(rhs);
+        let (n, carry_flag2) = self.get_register_a().overflowing_add(rhs);
+        // TODO u8前提の処理の場合、carry_flag*がきちんと取れないため、
+        // マスク + carry_flag*の計算を別で行う必要あり。
 
-        let overflow = (self.register_a & SIGN_BIT) == (value & SIGN_BIT)
+        let overflow = (self.get_register_a() & SIGN_BIT) == (value & SIGN_BIT)
             && (value & SIGN_BIT) != (n & SIGN_BIT);
 
-        self.register_a = n;
+        self.set_register_a(n);
 
         self.status = if carry_flag1 || carry_flag2 {
             self.status | FLAG_CARRY
@@ -1359,9 +1361,7 @@ impl CPU {
             self.status & !FLAG_OVERFLOW
         };
 
-        self.update_zero_and_negative_flags(self.register_a)
-      */
-      todo!("adc");
+        self.update_zero_and_negative_flags(n)
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
