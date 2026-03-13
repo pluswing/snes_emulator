@@ -110,8 +110,6 @@ const FLAG_INTERRRUPT: u8 = 1 << 2;
 const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
 
-const SIGN_BIT: u8 = 1 << 7; // FIXME FLAG_OVERFLOWで使用？
-
 pub const MODE_16BIT: u8 = 0;
 const MODE_8BIT: u8 = 1;
 
@@ -1335,18 +1333,35 @@ impl CPU {
       todo!("sbc");
     }
 
+    fn overflowing_add(&self, lhs: u16, rhs: u16) -> (u16, bool) {
+      if self.is_accumulator_16bit_mode() {
+        lhs.overflowing_add(rhs)
+      } else {
+        let (result, carry) = (lhs as u8).overflowing_add(rhs as u8);
+        (result as u16, carry)
+      }
+    }
+
+    fn sign_bit(&self, value: u16) -> bool {
+      if self.is_accumulator_16bit_mode() {
+        (value & 0x8000) != 0
+      } else {
+        (value & 0x0080) != 0
+      }
+    }
+
     pub fn adc(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_u16(addr);
 
         let carry = (self.status & FLAG_CARRY) as u16;
-        let (rhs, carry_flag1) = value.overflowing_add(carry);
-        let (n, carry_flag2) = self.get_register_a().overflowing_add(rhs);
-        // TODO u8前提の処理の場合、carry_flag*がきちんと取れないため、
-        // マスク + carry_flag*の計算を別で行う必要あり。
-
-        let overflow = (self.get_register_a() & SIGN_BIT) == (value & SIGN_BIT)
-            && (value & SIGN_BIT) != (n & SIGN_BIT);
+        let (rhs, carry_flag1) = self.overflowing_add(value, carry);
+        let a = self.get_register_a();
+        let (n, carry_flag2) = self.overflowing_add(a, rhs);
+        // TODO 2進化10進数
+        println!("V:{:04X} A:{:04X} C:{:04X} R:{:04X}", value, a, carry, n);
+        let overflow = self.sign_bit(a) == self.sign_bit(value)
+            && self.sign_bit(value) != self.sign_bit(n);
 
         self.set_register_a(n);
 
