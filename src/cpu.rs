@@ -1358,14 +1358,27 @@ impl CPU {
         let (rhs, carry_flag1) = self.overflowing_add(value, carry);
         let a = self.get_register_a();
         let (n, carry_flag2) = self.overflowing_add(a, rhs);
-        // TODO 2進化10進数
+        let n = if (self.status & FLAG_DECIMAL) != 0 {
+          // 2進化10進数
+          // 0x10E => 0x74
+          print!("BCD {:06X}", n);
+          let n = n + (n / 10) * 6;
+          // let n = if n & 0x000F >= 0x0009 { n + 0x0006 } else { n };
+          // let n = if n & 0x00F0 >= 0x0090 { n + 0x0060 } else { n };
+          println!(" ==> {:06X}", n);
+          n
+        } else {
+          n
+        };
+        let carry_flag3 = n > 0xFF;
+
         println!("V:{:04X} A:{:04X} C:{:04X} R:{:04X}", value, a, carry, n);
         let overflow = self.sign_bit(a) == self.sign_bit(value)
             && self.sign_bit(value) != self.sign_bit(n);
 
         self.set_register_a(n);
 
-        self.status = if carry_flag1 || carry_flag2 {
+        self.status = if carry_flag1 || carry_flag2 || carry_flag3 {
             self.status | FLAG_CARRY
         } else {
             self.status & !FLAG_CARRY
