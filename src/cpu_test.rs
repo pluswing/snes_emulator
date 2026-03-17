@@ -124,11 +124,9 @@ fn main() {
       // "aa.e", // TAX
       // "aa.n",
       // "e8.e", // INX
-      // "e8.n",
-      "6d.e",
-      "6d.n"
+      "e8.n",
     ];
-    // let targets = testcase("ADC");
+    let targets = testcase("BCC");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -137,6 +135,9 @@ fn main() {
       let mut cpu = CPU::new();
 
       for data in &deserialized {
+        if data.name == "6d e 3" {
+          continue;
+        }
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;

@@ -13,7 +13,7 @@ pub enum AddressingMode {
     Indirect,
     Indirect_X, // Indirect X
     Indirect_Y, // Indirect Y
-    Relative,
+    // Relative, => Program_Counter_Relative
     Implied,
 
     // 65816
@@ -324,7 +324,7 @@ impl CPU {
             // ↓ ネイティブモード(16Bitモード)時のアドレッシングモード
 
             // BCC *+4 => 90 04
-            AddressingMode::Relative => {
+            AddressingMode::Program_Counter_Relative => {
                 let base = self.mem_read(pc);
                 let np = (base as i8) as i32 + pc as i32;
                 return np as u32;
@@ -457,6 +457,15 @@ impl CPU {
         let lo = (data & 0x00FF) as u8;
         self.mem_write(pos, lo);
         self.mem_write(pos + 1, hi);
+    }
+
+    pub fn mem_write_auto(&mut self, pos: u32, data: u16) {
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0x00FF) as u8;
+        self.mem_write(pos, lo);
+        if self.is_native_mode() {
+          self.mem_write(pos + 1, hi);
+        }
     }
 
     fn load_and_run(&mut self, program: Vec<u8>) {
@@ -1087,33 +1096,26 @@ impl CPU {
     }
 
     fn _branch(&mut self, mode: &AddressingMode, flag: u8, nonzero: bool) {
-      /*
         let addr = self.get_operand_address(mode);
         if nonzero {
             if self.status & flag != 0 {
-                // (+1 if branch succeeds
-                //  +2 if to a new page)
-                //    => new pageの場合は、+1っぽい。
-                //     https://pgate1.at-ninja.jp/NES_on_FPGA/nes_cpu.htm#clock
-                self.add_cycles += 1;
-                if (self.program_counter & 0xFF00) != (addr & 0xFF00) {
-                    self.add_cycles += 1;
-                }
-                self.program_counter = addr
+                // self.add_cycles += 1;
+                // if (self.program_counter & 0xFF00) != (addr & 0xFF00) {
+                //     self.add_cycles += 1;
+                // }
+                self.program_counter = addr as u16
             }
         } else {
             if self.status & flag == 0 {
                 // (+1 if branch succeeds
                 //  +2 if to a new page)
-                self.add_cycles += 1;
-                if (self.program_counter & 0xFF00) != (addr & 0xFF00) {
-                    self.add_cycles += 1;
-                }
-                self.program_counter = addr
+                // self.add_cycles += 1;
+                // if (self.program_counter & 0xFF00) != (addr & 0xFF00) {
+                //     self.add_cycles += 1;
+                // }
+                self.program_counter = addr as u16
             }
         }
-      */
-      todo!("_branch");
     }
 
     pub fn brk(&mut self, mode: &AddressingMode) {
@@ -1249,17 +1251,26 @@ impl CPU {
       todo!("lsr");
     }
 
+    fn overflowing_mul(&self, lhs: u16, rhs: u16) -> (u16, bool) {
+      if self.is_accumulator_16bit_mode() {
+        lhs.overflowing_mul(rhs)
+      } else {
+        let (result, carry) = (lhs as u8).overflowing_mul(rhs as u8);
+        (result as u16, carry)
+      }
+    }
+
     pub fn asl(&mut self, mode: &AddressingMode) {
-      /*
         let (value, carry) = if mode == &AddressingMode::Accumulator {
-            let (value, carry) = self.register_a.overflowing_mul(2);
-            self.register_a = value;
+            let a = self.get_register_a();
+            let (value, carry) = self.overflowing_mul(a, 2);
+            self.set_register_a(value);
             (value, carry)
         } else {
             let addr = self.get_operand_address(mode);
-            let value = self.mem_read(addr);
-            let (value, carry) = value.overflowing_mul(2);
-            self.mem_write(addr, value);
+            let value = self.mem_read_u16(addr);
+            let (value, carry) = self.overflowing_mul(value, 2);
+            self.mem_write_u16(addr, value); // TODO
             (value, carry)
         };
 
@@ -1269,8 +1280,6 @@ impl CPU {
             self.status & !FLAG_CARRY
         };
         self.update_zero_and_negative_flags(value);
-      */
-      todo!("asl");
     }
 
     pub fn ora(&mut self, mode: &AddressingMode) {
@@ -1349,28 +1358,58 @@ impl CPU {
         (value & 0x0080) != 0
       }
     }
+/*
+    fn _bcd2(&self, value: u16) -> u16 {
+      if (self.status & FLAG_DECIMAL) == 0 {
+        return value;
+      }
+      let n1 = ((value & 0x000F) >> 0) * 1;
+      let n2 = ((value & 0x00F0) >> 4) * 10;
+      let n3 = ((value & 0x0F00) >> 8) * 100;
+      println!(" n1: {} n2: {} n3: {}", n1, n2, n3);
+      let mut d = n1 + n2 + n3;
+      d
+    }
 
+    fn _bcd3(&self, value: u16) -> u16 {
+      if (self.status & FLAG_DECIMAL) == 0 {
+        return value;
+      }
+      let mut d = value;
+      let mut ret: u16 = 0;
+      let mut shift = 0;
+      while d > 0 {
+        let m = d % 10;
+        d = d / 10;
+        ret += m << shift;
+        shift += 4;
+      }
+      ret
+    }
+ */
     pub fn adc(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_u16(addr);
+        // print!("V {:06X}({})", value, value);
+        // let value = self._bcd2(value);
+        // println!(" ==> {:06X}({})", value, value);
 
         let carry = (self.status & FLAG_CARRY) as u16;
         let (rhs, carry_flag1) = self.overflowing_add(value, carry);
         let a = self.get_register_a();
+        // print!("A {:06X}", a);
+        // let a = self._bcd2(a);
+        // println!(" ==> {:06X}({})", a, a);
+
         let (n, carry_flag2) = self.overflowing_add(a, rhs);
-        let n = if (self.status & FLAG_DECIMAL) != 0 {
-          // 2進化10進数
-          // 0x10E => 0x74
-          print!("BCD {:06X}", n);
-          let n = n + (n / 10) * 6;
-          // let n = if n & 0x000F >= 0x0009 { n + 0x0006 } else { n };
-          // let n = if n & 0x00F0 >= 0x0090 { n + 0x0060 } else { n };
-          println!(" ==> {:06X}", n);
-          n
-        } else {
-          n
-        };
-        let carry_flag3 = n > 0xFF;
+        // print!("STORE {:06X}", n);
+        // let n = self._bcd3(n);
+        // println!(" ==> {:06X}", n);
+        // let carry_flag3 = if self.status & FLAG_DECIMAL == 0 { false } else { n > 99};
+
+        // V:00DC A:00B2 C:0001 R:0095
+        //    142    112      1 = 0x255
+        // F5
 
         println!("V:{:04X} A:{:04X} C:{:04X} R:{:04X}", value, a, carry, n);
         let overflow = self.sign_bit(a) == self.sign_bit(value)
@@ -1378,7 +1417,7 @@ impl CPU {
 
         self.set_register_a(n);
 
-        self.status = if carry_flag1 || carry_flag2 || carry_flag3 {
+        self.status = if carry_flag1 || carry_flag2 /* || carry_flag3 */ {
             self.status | FLAG_CARRY
         } else {
             self.status & !FLAG_CARRY

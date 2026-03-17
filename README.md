@@ -1,9 +1,9 @@
 # snes_emulator
 
-ADC
+TODO ADC
 ✅ AND
-ASL
-BCC
+✅ ASL
+✅ BCC
 BCS
 BEQ
 BIT
