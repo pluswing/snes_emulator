@@ -4,12 +4,12 @@ TODO ADC
 ✅ AND
 ✅ ASL
 ✅ BCC
-BCS
-BEQ
-BIT
-BMI
-BNE
-BPL
+✅ BCS
+✅ BEQ
+✅ BIT
+✅ BMI
+✅ BNE
+✅ BPL
 BRA
 BRK
 BRL

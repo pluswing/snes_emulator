@@ -260,7 +260,7 @@ impl CPU {
 
             // LDA $4400 => ad 00 44
             AddressingMode::Absolute => {
-              let addr = self.mem_read_u16(pc) as u32;
+              let addr = self.wrapped_mem_read_u16(pc) as u32;
               ((self.data_bank as u32) << 16) | addr
             }
 
@@ -558,7 +558,9 @@ impl CPU {
         todo!("ply")
     }
     pub fn bra(&mut self, mode: &AddressingMode) {
-        todo!("bra")
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read_u16(addr);
+        self.program_counter = value
     }
     pub fn mvp(&mut self, mode: &AddressingMode) {
         todo!("mvp")
@@ -1142,20 +1144,26 @@ impl CPU {
     }
 
     pub fn bit(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+        let value = self.mem_read_u16(addr);
+        println!("ADDR: {:06X} VALUE: {:06X}", addr, value);
 
-        let zero = self.register_a & value;
+        let zero = self.get_register_a() & value;
         if zero == 0 {
             self.status = self.status | FLAG_ZERO;
         } else {
             self.status = self.status & !FLAG_ZERO;
         }
+        // Immediateの場合は、nagative, overflowフラグを変更しない。
+        if *mode == AddressingMode::Immediate {
+          return;
+        }
         let flags = FLAG_NEGATIVE | FLAG_OVERFLOW;
-        self.status = (self.status & !flags) | (value & flags);
-      */
-      todo!("bit");
+        if self.is_accumulator_16bit_mode() {
+          self.status = (self.status & !flags) | ((value >> 8) as u8 & flags);
+        } else {
+          self.status = (self.status & !flags) | (value as u8 & flags);
+        }
     }
 
     pub fn bne(&mut self, mode: &AddressingMode) {
