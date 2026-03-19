@@ -10,10 +10,6 @@ pub enum AddressingMode {
     Absolute,
     Absolute_Indexed_by_X, // Absolute Indexed by X
     Absolute_Indexed_by_Y, // Absolute Indexed by Y
-    Indirect,
-    Indirect_X, // Indirect X
-    Indirect_Y, // Indirect Y
-    // Relative, => Program_Counter_Relative
     Implied,
 
     // 65816
@@ -40,7 +36,7 @@ pub enum AddressingMode {
 
     // TODO ??
     Absolute_Indirect, // Absolute Indirect
-    Absolute_Indexed_Indirect, // Absolute Indexed Indirect
+    Absolute_Indexed_Indirect, // Absolute Indexed Indirect => Absolute Indexed Indirect, X ??
     Absolute_Indirect_Long // Absolute Indirect Long
 }
 
@@ -240,31 +236,59 @@ impl CPU {
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         let pc = self.pc();
         match mode {
-            AddressingMode::Implied => {
-                panic!("AddressingMode::Implied");
-            }
-            AddressingMode::Accumulator => {
-                panic!("AddressingMode::Accumulator");
-            }
-            // LDA #$44 => a9 44
             AddressingMode::Immediate => {
+              // アドレス部の内容が目的のデータとして利用されます。先頭に#をつけて#$1234のように表します。
               pc
             },
-
-            // LDA $44 => a5 44
-            AddressingMode::Direct_Page => {
-              // = Direct Pageなので、統合する必要あり。
-              let addr = self.mem_read(pc) as u32;
-              (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF
-            },
-
-            // LDA $4400 => ad 00 44
             AddressingMode::Absolute => {
+              // アドレス部の内容が目的のデータが格納されている16bitアドレスを表します。$1234のように表します。
               let addr = self.wrapped_mem_read_u16(pc) as u32;
               ((self.data_bank as u32) << 16) | addr
             }
-
-            // LDA $44,X => b5 44
+            AddressingMode::Absolute_Long => {
+              // アドレス部の内容が目的のデータが格納されている24bitフルアドレスを表します。$123456のように表します。
+              let addr = self.mem_read_u16(pc);
+              let bank = self.mem_read(pc + 2);
+              (bank as u32) << 16 | addr as u32
+            }
+            AddressingMode::Absolute_Indexed_by_X => {
+                // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されているアドレスを表します。
+                // Xレジスタを足すのかYレジスタを足すのかで$1234,xと$1234,yという表し方があります。
+                let base = self.wrapped_mem_read_u16(pc);
+                // println!("BASE {:06X}", base);
+                let addr = ((self.data_bank as u32) << 16) | base as u32;
+                // println!("+DBR {:06X}", addr);
+                let addr = addr.wrapping_add(self.get_register_x() as u32);
+                // println!("+X {:06X}", addr);
+                addr & 0xFFFFFF
+            }
+            AddressingMode::Absolute_Indexed_by_Y => {
+                let base = self.wrapped_mem_read_u16(pc);
+                let addr = ((self.data_bank as u32) << 16) | base as u32;
+                let addr = addr.wrapping_add(self.get_register_y() as u32);
+                addr & 0xFFFFFF
+            }
+            AddressingMode::Absolute_Long_Indexed_by_X => {
+                // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
+                // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
+                let base = self.mem_read_u16(pc);
+                let bank = self.mem_read((pc & 0xFF0000) | ((pc + 2) & 0x00FFFF));
+                let addr = ((bank as u32) << 16) | base as u32;
+                let addr = addr.wrapping_add(self.get_register_x() as u32);
+                addr & 0xFFFFFF
+            }
+            AddressingMode::Absolute_Indirect => {
+              todo!("Absolute_Indirect");
+            }
+            AddressingMode::Absolute_Indirect_Long => {
+              todo!("Absolute_Indirect_Long");
+            }
+            AddressingMode::Direct_Page => {
+              // アドレス部の内容にダイレクトページレジスタの値を足したアドレスが目的のデータの各のされているアドレスを表します。
+              // $12のように表します。なお、フルアドレス上位8bitは0固定となります。
+              let addr = self.mem_read(pc) as u32;
+              (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF
+            },
             AddressingMode::Direct_Page_Indexed_by_X => {
               // アドレス部の内容にダイレクトページレジスタの値とインデクスレジスタを足したアドレスが目的のデータの各のされているアドレスを表します。
               // Xレジスタを足すのかYレジスタを足すのかで$12,xと$12,yという表し方があります。
@@ -278,85 +302,27 @@ impl CPU {
               };
               addr & 0x00FFFF
             }
-
-            // LDA $4400,X => bd 00 44
-            AddressingMode::Absolute_Indexed_by_X => {
-                let base = self.wrapped_mem_read_u16(pc);
-                // println!("BASE {:06X}", base);
-                let addr = ((self.data_bank as u32) << 16) | base as u32;
-                // println!("+DBR {:06X}", addr);
-                let addr = addr.wrapping_add(self.get_register_x() as u32);
-                // println!("+X {:06X}", addr);
-                addr & 0xFFFFFF
+            AddressingMode::Direct_Page_Indexed_by_Y => {
+              let addr = self.mem_read(pc);
+              let addr = self.direct_page.wrapping_add(addr as u16) as u32;
+              addr.wrapping_add(self.get_register_y() as u32)
             }
-
-            // LDA $4400,Y => b9 00 44
-            AddressingMode::Absolute_Indexed_by_Y => {
-                let base = self.wrapped_mem_read_u16(pc);
-                let addr = ((self.data_bank as u32) << 16) | base as u32;
-                let addr = addr.wrapping_add(self.get_register_y() as u32);
-                addr & 0xFFFFFF
-            }
-            // JMP -> same Absolute
-            AddressingMode::Indirect => {
-                let base = self.mem_read_u16(pc);
-                let addr = self.mem_read_u16(base as u32);
-                addr as u32
-            }
-
-            // LDA ($44,X) => a1 44
-            AddressingMode::Indirect_X => {
-                let base = self.mem_read(pc);
-                let ptr: u8 = (base as u8).wrapping_add(self.get_register_x() as u8);
-                let addr = self.mem_read_u16(ptr as u32);
-                addr as u32
-            }
-
-            // LDA ($44),Y => b1 44
-            AddressingMode::Indirect_Y => {
-                let base = self.mem_read(pc);
-                let deref_base = self.mem_read_u16(base as u32);
-                let deref = deref_base.wrapping_add(self.get_register_y() as u16);
-                deref as u32
-            }
-            // ↑ エミュレーションモード(8Bitモード)時のアドレッシングモード
-
-            // ↓ ネイティブモード(16Bitモード)時のアドレッシングモード
-
-            // BCC *+4 => 90 04
-            AddressingMode::Program_Counter_Relative => {
-                let base = self.mem_read(pc);
-                let np = (base as i8) as i32 + pc as i32;
-                return np as u32;
-            }
-
-            // LDA long => AF 12 56 34
-            AddressingMode::Absolute_Long => {
-              let addr = self.mem_read_u16(pc);
-              let bank = self.mem_read(pc + 2);
-              (bank as u32) << 16 | addr as u32
-            }
-            // LDA ($12) => B2 12
             AddressingMode::Direct_Page_Indirect => {
+              // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから16bitを読み込み、それを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
+              // ($12)のように表します。
               let addr = self.mem_read(pc) as u32;
               let addr = (self.direct_page as u32).wrapping_add(addr) & 0x00FFFF;
               ((self.data_bank as u32) << 16) | self.mem_read_u16(addr) as u32
             }
-            // LDA [$12] => A7 12
             AddressingMode::Direct_Page_Indirect_Long => {
+              // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから24bitを読み込んだそのアドレスに目的のデータが格納されています。
+              // [$12]のように表します。
               let base = self.mem_read(pc) as u32;
               let base = (self.direct_page as u32).wrapping_add(base) & 0x00FFFF;
               let addr = self.wrapped_mem_read_u16(base) as u32;
               let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
             }
-            // TODO LDAには無いアドレッシングモード
-            AddressingMode::Direct_Page_Indexed_by_Y => {
-              let addr = self.mem_read(pc);
-              let addr = self.direct_page.wrapping_add(addr as u16) as u32;
-              addr.wrapping_add(self.get_register_y() as u32)
-            }
-            // LDA (dp, X) => A1 dp
             AddressingMode::Direct_Page_Indexed_Indirect_by_X => {
               // アドレス部の内容にダイレクトページレジスタとXレジスタの値を足して得られるアドレスから16bitを読み込み、それを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
               // ダイレクトインデクスYインダイレクトモードはありません。($12, x)のように表します。
@@ -383,15 +349,6 @@ impl CPU {
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               ((self.data_bank as u32) << 16).wrapping_add(addr) & 0xFFFFFF
             }
-            AddressingMode::Absolute_Long_Indexed_by_X => {
-                // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
-                // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
-                let base = self.mem_read_u16(pc);
-                let bank = self.mem_read((pc & 0xFF0000) | ((pc + 2) & 0x00FFFF));
-                let addr = ((bank as u32) << 16) | base as u32;
-                let addr = addr.wrapping_add(self.get_register_x() as u32);
-                addr & 0xFFFFFF
-            }
             AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
               // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから24bitを読み込み、さらにYレジスタを足したアドレスに目的のデータが格納されています。
               // ダイレクトインダイレクトロングインデクスXモードはありません。[$12],yのように表します。
@@ -409,6 +366,18 @@ impl CPU {
               let addr: u32 = addr.wrapping_add(self.get_register_y() as u32);
               println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
               addr & 0xFFFFFF
+            }
+            AddressingMode::Program_Counter_Relative => {
+                // ソース上の現在位置と、目的データの対象の位置との差分でアドレスを指定します。プログラムカウンタにアドレス部の内容を足したものが目的のデータのアドレスとなります。参照範囲は-128バイト～+127バイト以内でなければいけません。アセンブリコード上では基本的にラベルを用いて記述します(つまりアセンブル時に自動的にコード配置がされる)。
+                let base = self.mem_read(pc);
+                let np = (base as i8) as i32 + pc as i32;
+                return np as u32;
+            }
+            AddressingMode::Program_Counter_Relative_Long => {
+                // ソース上の現在位置と、目的データの対象の位置との差分でアドレスを指定します。プログラムカウンタにアドレス部の内容を足したものが目的のデータのアドレスとなります。参照範囲は-32768バイト～+32767バイト以内でなければいけません。アセンブリコード上では基本的にラベルを用いて記述します(つまりアセンブル時に自動的にコード配置がされる)。
+                let base: u16 = self.mem_read_u16(pc);
+                let np = (base as i16) as i32 + pc as i32;
+                return np as u32;
             }
             AddressingMode::Stack_Relative => {
               // アドレス部の内容にスタックポインタを足したアドレスが目的のデータが格納されたアドレスを表します。
@@ -430,7 +399,6 @@ impl CPU {
               // println!("ADDR: {:06X}", addr);
               addr & 0xFFFFFF
             }
-
             AddressingMode::NoneAddressing => {
                 panic!("mode {:?} is not supported", mode);
             }
@@ -558,9 +526,7 @@ impl CPU {
         todo!("ply")
     }
     pub fn bra(&mut self, mode: &AddressingMode) {
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read_u16(addr);
-        self.program_counter = value
+      self._branch(mode, 0x00, false);
     }
     pub fn mvp(&mut self, mode: &AddressingMode) {
         todo!("mvp")
@@ -587,7 +553,7 @@ impl CPU {
         todo!("cop")
     }
     pub fn brl(&mut self, mode: &AddressingMode) {
-        todo!("brl")
+        self._branch(mode, 0x00, false);
     }
     pub fn tdc(&mut self, mode: &AddressingMode) {
         todo!("tdc")
@@ -1121,6 +1087,9 @@ impl CPU {
     }
 
     pub fn brk(&mut self, mode: &AddressingMode) {
+
+        // ネイティブモードでは、プログラムバンクレジスタがスタックにプッシュされます。次に、プログラムカウンタが2インクリメントされ、スタックにプッシュされます。次に、ステータスレジスタ（エミュレーションモードの場合はブレークフラグがセットされた状態）がスタックにプッシュされます。次に、割り込み無効フラグがセットされます。ネイティブモードでは、プログラムバンクレジスタがクリアされます。
+
         // FLAG_BREAK が立っている場合は
         if self.status & FLAG_BREAK != 0 {
             return;

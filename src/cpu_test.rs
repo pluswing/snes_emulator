@@ -127,7 +127,7 @@ fn main() {
       "2c.e",
       "2c.n",
     ];
-    let targets = testcase("BRA");
+    let targets = testcase("CMP");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");

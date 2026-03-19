@@ -10,15 +10,15 @@ TODO ADC
 ✅ BMI
 ✅ BNE
 ✅ BPL
-BRA
+✅ BRA
 BRK
-BRL
-BVC
-BVS
-CLC
-CLD
-CLI
-CLV
+✅ BRL
+✅ BVC
+✅ BVS
+✅ CLC
+✅ CLD
+✅ CLI
+✅ CLV
 CMP
 COP
 CPX
