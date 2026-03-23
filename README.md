@@ -19,7 +19,7 @@ BRK
 ✅ CLD
 ✅ CLI
 ✅ CLV
-CMP
+✅ CMP
 COP
 CPX
 CPY

@@ -194,11 +194,12 @@ impl CPU {
     }
 
     pub fn get_register_a(&mut self) -> u16 {
-      if self.is_accumulator_16bit_mode() {
+      let a = if self.is_accumulator_16bit_mode() {
         self.register_a
       } else {
         self.register_a & 0x00FF
-      }
+      };
+      a
     }
 
     pub fn set_register_x(&mut self, value: u16) {
@@ -303,6 +304,7 @@ impl CPU {
               addr & 0x00FFFF
             }
             AddressingMode::Direct_Page_Indexed_by_Y => {
+              // FIXME 要確認
               let addr = self.mem_read(pc);
               let addr = self.direct_page.wrapping_add(addr as u16) as u32;
               addr.wrapping_add(self.get_register_y() as u32)
@@ -345,7 +347,7 @@ impl CPU {
               let addr = self.mem_read(pc);
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
-              let addr = self.mem_read_u16(addr) as u32;
+              let addr = self.wrapped_mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               ((self.data_bank as u32) << 16).wrapping_add(addr) & 0xFFFFFF
             }
@@ -385,6 +387,7 @@ impl CPU {
               // $01,sのように表します。
               let value = self.mem_read(pc) as u32;
               let addr = (self.stack_pointer as u32).wrapping_add(value);
+              println!("{:04X}, {:06X}", value, addr);
               addr & 0x00FFFF
             }
             AddressingMode::Stack_Relative_Indirect_Indexed_by_Y => {
@@ -991,10 +994,15 @@ impl CPU {
       todo!("dec");
     }
 
-    fn _cmp(&mut self, target: u8, mode: &AddressingMode) {
-      /*
+    fn _cmp(&mut self, target: u16, mode16bit: bool, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+        let value = if mode16bit {
+          self.mem_read_u16(addr)
+        } else {
+          self.mem_read(addr) as u16
+        };
+        // target = D1, value = 5D
+        println!("A:{:04X} M:{:04X}", target, value);
         if target >= value {
             self.sec(&AddressingMode::Implied);
         } else {
@@ -1002,8 +1010,6 @@ impl CPU {
         }
         let value = target.wrapping_sub(value);
         self.update_zero_and_negative_flags(value);
-      */
-      todo!("_cmp");
     }
 
     pub fn cpy(&mut self, mode: &AddressingMode) {
@@ -1021,10 +1027,8 @@ impl CPU {
     }
 
     pub fn cmp(&mut self, mode: &AddressingMode) {
-      /*
-        self._cmp(self.register_a, mode);
-      */
-      todo!("cmp");
+      let a = self.get_register_a();
+      self._cmp(a, self.is_accumulator_16bit_mode(), mode);
     }
 
     pub fn clv(&mut self, mode: &AddressingMode) {
