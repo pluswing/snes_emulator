@@ -598,7 +598,7 @@ m
 
 pub fn call(cpu: &mut CPU, op: &OpCode) {
   match op.name.as_str() {
-    
+
 
   "BNE" => {
       cpu.bne(&op.addressing_mode);
@@ -855,7 +855,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CPY" => {
       cpu.cpy(&op.addressing_mode);
-      let bytes = if cpu.is_accumulator_16bit_mode() {
+      let bytes = if cpu.is_index_register_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1086,7 +1086,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "CPX" => {
       cpu.cpx(&op.addressing_mode);
-      let bytes = if cpu.is_accumulator_16bit_mode() {
+      let bytes = if cpu.is_index_register_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes

@@ -181,7 +181,7 @@ impl CPU {
     }
 
 
-    fn is_index_register_16bit_mode(&self) -> bool {
+    pub fn is_index_register_16bit_mode(&self) -> bool {
       self.is_native_mode() && (self.status & FLAG_INDEX_REGISTER_MODE) == MODE_16BIT
     }
 
@@ -553,7 +553,12 @@ impl CPU {
         todo!("wdm")
     }
     pub fn cop(&mut self, mode: &AddressingMode) {
-        todo!("cop")
+      // FIXME
+      // program bank register
+      // program counter
+      // status register をスタックに積む
+      //  エミュレーションモード => pc = 0xFFF4に
+      //  ネイティブモード      => pc = $00:FFE4にする。
     }
     pub fn brl(&mut self, mode: &AddressingMode) {
         self._branch(mode, 0x00, false);
@@ -994,41 +999,42 @@ impl CPU {
       todo!("dec");
     }
 
-    fn _cmp(&mut self, target: u16, mode16bit: bool, mode: &AddressingMode) {
+    fn _cmp(&mut self, target: u16, accumulator: bool, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
+        let mode16bit = if accumulator {
+          self.is_accumulator_16bit_mode()
+        } else {
+          self.is_index_register_16bit_mode()
+        };
+
         let value = if mode16bit {
           self.mem_read_u16(addr)
         } else {
           self.mem_read(addr) as u16
         };
-        // target = D1, value = 5D
-        println!("A:{:04X} M:{:04X}", target, value);
         if target >= value {
             self.sec(&AddressingMode::Implied);
         } else {
             self.clc(&AddressingMode::Implied);
         }
         let value = target.wrapping_sub(value);
-        self.update_zero_and_negative_flags(value);
+        println!("{:04X}", value);
+        self._update_zero_and_negative_flags(value, accumulator);
     }
 
     pub fn cpy(&mut self, mode: &AddressingMode) {
-      /*
-        self._cmp(self.register_y, mode);
-      */
-      todo!("cpy");
+      let y = self.get_register_y();
+      self._cmp(y, false, mode);
     }
 
     pub fn cpx(&mut self, mode: &AddressingMode) {
-      /*
-        self._cmp(self.register_x, mode);
-      */
-      todo!("cpx");
+      let x = self.get_register_x();
+      self._cmp(x, false, mode);
     }
 
     pub fn cmp(&mut self, mode: &AddressingMode) {
       let a = self.get_register_a();
-      self._cmp(a, self.is_accumulator_16bit_mode(), mode);
+      self._cmp(a, true, mode);
     }
 
     pub fn clv(&mut self, mode: &AddressingMode) {

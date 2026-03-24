@@ -21,7 +21,7 @@ BRK
 ✅ CLV
 ✅ CMP
 COP
-CPX
+✅ CPX
 CPY
 DEC
 DEX
