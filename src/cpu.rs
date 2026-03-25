@@ -554,11 +554,27 @@ impl CPU {
     }
     pub fn cop(&mut self, mode: &AddressingMode) {
       // FIXME
-      // program bank register
+      // program bank register (ネイティブモードの時。)
       // program counter
       // status register をスタックに積む
-      //  エミュレーションモード => pc = 0xFFF4に
-      //  ネイティブモード      => pc = $00:FFE4にする。
+      //  エミュレーションモード => pc = 0xFFF4の内容
+      //  ネイティブモード      => pc = $00:FFE4の内容にする。
+      if self.is_native_mode() {
+        self._push(self.program_bank);
+      }
+      // 仕様上は+2。run()で+1しているので、ここでは+1でOK。
+      self._push_u16(self.program_counter + 1);
+      self._push(self.status);
+      self.program_bank = 0x00;
+      if self.is_native_mode() {
+        self.program_counter = self.mem_read_u16(0x00FFE4);
+      } else {
+        self.program_counter = self.mem_read_u16(0xFFF4);
+      }
+      self.status = self.status | FLAG_INTERRRUPT;
+      self.status = self.status & !FLAG_DECIMAL;
+      // opscodes.rsで自動加算されるため、調整。
+      self.program_counter = self.program_counter.wrapping_sub(1);
     }
     pub fn brl(&mut self, mode: &AddressingMode) {
         self._branch(mode, 0x00, false);
@@ -914,13 +930,11 @@ impl CPU {
     }
 
     pub fn _push(&mut self, value: u8) {
-      /*
-        let addr = 0x0100 + self.stack_pointer as u16;
-        trace!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
-        self.mem_write(addr, value);
-        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
-      */
-      todo!("_push");
+      let addr = self.stack_pointer as u32;
+      trace!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
+      self.mem_write(addr, value);
+      self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+      self.apply_mode();
     }
 
     pub fn _pop(&mut self) -> u8 {
@@ -999,42 +1013,55 @@ impl CPU {
       todo!("dec");
     }
 
-    fn _cmp(&mut self, target: u16, accumulator: bool, mode: &AddressingMode) {
-        let addr = self.get_operand_address(mode);
-        let mode16bit = if accumulator {
-          self.is_accumulator_16bit_mode()
-        } else {
-          self.is_index_register_16bit_mode()
-        };
-
-        let value = if mode16bit {
-          self.mem_read_u16(addr)
-        } else {
-          self.mem_read(addr) as u16
-        };
-        if target >= value {
-            self.sec(&AddressingMode::Implied);
-        } else {
-            self.clc(&AddressingMode::Implied);
-        }
-        let value = target.wrapping_sub(value);
-        println!("{:04X}", value);
-        self._update_zero_and_negative_flags(value, accumulator);
-    }
-
     pub fn cpy(&mut self, mode: &AddressingMode) {
-      let y = self.get_register_y();
-      self._cmp(y, false, mode);
+      let target = self.get_register_y();
+      let addr = self.get_operand_address(mode);
+      let value = if self.is_index_register_16bit_mode() {
+        self.wrapped_mem_read_u16(addr)
+      } else {
+        self.mem_read(addr) as u16
+      };
+      if target >= value {
+          self.sec(&AddressingMode::Implied);
+      } else {
+          self.clc(&AddressingMode::Implied);
+      }
+      let value = target.wrapping_sub(value);
+      self.update_zero_and_negative_flags_xy(value);
     }
 
     pub fn cpx(&mut self, mode: &AddressingMode) {
-      let x = self.get_register_x();
-      self._cmp(x, false, mode);
+      let target = self.get_register_x();
+      let addr = self.get_operand_address(mode);
+      let value = if self.is_index_register_16bit_mode() {
+        self.mem_read_u16(addr)
+      } else {
+        self.mem_read(addr) as u16
+      };
+      if target >= value {
+          self.sec(&AddressingMode::Implied);
+      } else {
+          self.clc(&AddressingMode::Implied);
+      }
+      let value = target.wrapping_sub(value);
+        self.update_zero_and_negative_flags_xy(value);
     }
 
     pub fn cmp(&mut self, mode: &AddressingMode) {
-      let a = self.get_register_a();
-      self._cmp(a, true, mode);
+      let target = self.get_register_a();
+      let addr = self.get_operand_address(mode);
+      let value = if self.is_accumulator_16bit_mode() {
+        self.mem_read_u16(addr)
+      } else {
+        self.mem_read(addr) as u16
+      };
+      if target >= value {
+          self.sec(&AddressingMode::Implied);
+      } else {
+          self.clc(&AddressingMode::Implied);
+      }
+      let value = target.wrapping_sub(value);
+      self.update_zero_and_negative_flags(value);
     }
 
     pub fn clv(&mut self, mode: &AddressingMode) {

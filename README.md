@@ -20,9 +20,9 @@ BRK
 ✅ CLI
 ✅ CLV
 ✅ CMP
-COP
+✅ COP
 ✅ CPX
-CPY
+✅ CPY
 DEC
 DEX
 DEY
