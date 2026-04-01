@@ -23,9 +23,9 @@ BRK
 ✅ COP
 ✅ CPX
 ✅ CPY
-DEC
-DEX
-DEY
+✅ DEC
+✅ DEX
+✅ DEY
 EOR
 INC
 ✅ INX

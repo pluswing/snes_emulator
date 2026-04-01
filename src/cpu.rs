@@ -248,8 +248,8 @@ impl CPU {
             }
             AddressingMode::Absolute_Long => {
               // アドレス部の内容が目的のデータが格納されている24bitフルアドレスを表します。$123456のように表します。
-              let addr = self.mem_read_u16(pc);
-              let bank = self.mem_read(pc + 2);
+              let addr = self.wrapped_mem_read_u16(pc);
+              let bank = self.mem_read(pc & 0xFF0000 | (pc + 2) & 0x00FFFF);
               (bank as u32) << 16 | addr as u32
             }
             AddressingMode::Absolute_Indexed_by_X => {
@@ -272,7 +272,7 @@ impl CPU {
             AddressingMode::Absolute_Long_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
                 // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
-                let base = self.mem_read_u16(pc);
+                let base = self.wrapped_mem_read_u16(pc);
                 let bank = self.mem_read((pc & 0xFF0000) | ((pc + 2) & 0x00FFFF));
                 let addr = ((bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.get_register_x() as u32);
@@ -994,23 +994,35 @@ impl CPU {
     }
 
     pub fn dey(&mut self, mode: &AddressingMode) {
-        self.register_y = self.register_y.wrapping_sub(1);
-        self.update_zero_and_negative_flags(self.register_y);
+        let value = self.get_register_y().wrapping_sub(1);
+        self.set_register_y(value);
+        self.update_zero_and_negative_flags_xy(value);
     }
 
     pub fn dex(&mut self, mode: &AddressingMode) {
-        self.register_x = self.register_x.wrapping_sub(1);
-        self.update_zero_and_negative_flags(self.register_x);
+        let value = self.get_register_x().wrapping_sub(1);
+        self.set_register_x(value);
+        self.update_zero_and_negative_flags_xy(value);
     }
 
     pub fn dec(&mut self, mode: &AddressingMode) {
-      /*
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr).wrapping_sub(1);
-        self.mem_write(addr, value);
+      if mode == &AddressingMode::Accumulator {
+        let value = self.get_register_a().wrapping_sub(1);
+        self.set_register_a(value);
         self.update_zero_and_negative_flags(value);
-      */
-      todo!("dec");
+      } else {
+        let addr = self.get_operand_address(mode);
+        let value = if self.is_accumulator_16bit_mode() {
+          let value = self.mem_read_u16(addr).wrapping_sub(1);
+          self.mem_write_u16(addr, value);
+          value
+        } else {
+          let value = self.mem_read(addr).wrapping_sub(1);
+          self.mem_write(addr, value);
+          value as u16
+        };
+        self.update_zero_and_negative_flags(value);
+      }
     }
 
     pub fn cpy(&mut self, mode: &AddressingMode) {
@@ -1301,17 +1313,17 @@ impl CPU {
         let value: u16 = self.mem_read_u16(addr);
         let a = self.get_register_a() | value;
         self.set_register_a(a);
+        let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);
     }
 
     pub fn eor(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
-        self.register_a = self.register_a ^ value;
-        self.update_zero_and_negative_flags(self.register_a);
-      */
-      todo!("eor");
+        let value = self.mem_read_u16(addr);
+        let a = self.get_register_a() ^ value;
+        self.set_register_a(a);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
     }
 
     pub fn and(&mut self, mode: &AddressingMode) {
