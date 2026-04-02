@@ -26,7 +26,7 @@ BRK
 ✅ DEC
 ✅ DEX
 ✅ DEY
-EOR
+✅ EOR
 INC
 ✅ INX
 INY

@@ -337,7 +337,7 @@ impl CPU {
                 addr.wrapping_add(self.get_register_x() as u32)
               };
               let addr = addr & 0x00FFFF;
-              let addr = self.mem_read_u16(addr) as u32;
+              let addr = self.wrapped_mem_read_u16(addr) as u32;
               (self.data_bank as u32) << 16 | addr
             }
             // LDA (dp), Y => B1 dp
@@ -358,15 +358,18 @@ impl CPU {
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
               let base = self.wrapped_mem_read_u16(addr);
+              // println!("ADDR: {:06X}", addr);
               let bank = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
                 let addr = addr & 0xFF00 | (addr + 2) & 0x00FF;
                 self.mem_read(addr)
               } else {
                 self.mem_read((addr + 2) & 0xFFFF)
               };
+              // println!("BANK: {:06X}", bank);
               let addr = ((bank as u32) << 16) | base as u32;
+              // println!("ADDR: {:06X}", addr);
               let addr: u32 = addr.wrapping_add(self.get_register_y() as u32);
-              println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
+              // println!("ADDR: {:06X} BASE: {:04X}", addr & 0xFFFFFF, base);
               addr & 0xFFFFFF
             }
             AddressingMode::Program_Counter_Relative => {
@@ -418,9 +421,15 @@ impl CPU {
     }
 
     pub fn wrapped_mem_read_u16(&mut self, pos: u32) -> u16 {
-        let lo = self.mem_read(pos) as u16;
-        let hi = self.mem_read((pos & 0xFF0000) | ((pos + 1) & 0x00FFFF))  as u16;
-        (hi << 8) | (lo as u16)
+        if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
+          let lo = self.mem_read(pos) as u16;
+          let hi = self.mem_read((pos & 0xFFFF00) | ((pos + 1) & 0x0000FF))  as u16;
+          (hi << 8) | (lo as u16)
+        } else {
+          let lo = self.mem_read(pos) as u16;
+          let hi = self.mem_read((pos & 0xFF0000) | ((pos + 1) & 0x00FFFF))  as u16;
+          (hi << 8) | (lo as u16)
+        }
     }
 
     pub fn mem_write_u16(&mut self, pos: u32, data: u16) {
