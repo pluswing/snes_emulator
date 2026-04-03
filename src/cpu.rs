@@ -281,8 +281,16 @@ impl CPU {
             AddressingMode::Absolute_Indirect => {
               todo!("Absolute_Indirect");
             }
+            AddressingMode::Absolute_Indexed_Indirect => {
+              todo!("Absolute_Indexed_Indirect");
+            }
             AddressingMode::Absolute_Indirect_Long => {
-              todo!("Absolute_Indirect_Long");
+              // アドレス部のアドレスから24bitを読み込んだそのアドレスに目的のデータが格納されています。
+              // [$1234]のように表します。
+              let base = self.wrapped_mem_read_u16(pc) as u32;
+              let addr = self.wrapped_mem_read_u16(base) as u32;
+              let bank = self.mem_read((base + 2) & 0x00FFFF);
+              (bank as u32) << 16 | addr
             }
             AddressingMode::Direct_Page => {
               // アドレス部の内容にダイレクトページレジスタの値を足したアドレスが目的のデータの各のされているアドレスを表します。
@@ -969,20 +977,19 @@ impl CPU {
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        self.program_counter = addr;
-        // 後で+2するので整合性のため-2しておく
-        self.program_counter -= 2;
-        // TODO
-        // オリジナルの 6502 は、間接ベクトルがページ境界にある場合、ターゲット アドレスを正しくフェッチしません (たとえば、$xxFF で、xx は $00 から $FF までの任意の値です)。この場合、予想どおり $xxFF から LSB を取得しますが、$xx00 から MSB を取得します。これは、65SC02 などの最近のチップで修正されているため、互換性のために、間接ベクトルがページの最後にないことを常に確認してください。
-      */
-      todo!("jmp");
+        println!("ADDR: {:06X}", addr);
+        self.program_counter = addr as u16;
+        if *mode != AddressingMode::Absolute && *mode != AddressingMode::Absolute_Indirect && *mode == AddressingMode::Absolute_Indexed_Indirect {
+          self.program_bank = (addr >> 16) as u8;
+        }
     }
 
     pub fn iny(&mut self, mode: &AddressingMode) {
-        self.register_y = self.register_y.wrapping_add(1);
-        self.update_zero_and_negative_flags(self.register_y);
+        let y = self.get_register_y();
+        self.set_register_y(y.wrapping_add(1));
+        let y = self.get_register_y();
+        self.update_zero_and_negative_flags_xy(y);
     }
 
     pub fn inx(&mut self, mode: &AddressingMode) {
@@ -993,13 +1000,24 @@ impl CPU {
     }
 
     pub fn inc(&mut self, mode: &AddressingMode) {
-      /*
+      if mode == &AddressingMode::Accumulator {
+        let value = self.get_register_a().wrapping_add(1);
+        self.set_register_a(value);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
+      } else {
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr).wrapping_add(1);
-        self.mem_write(addr, value);
+        let value = if self.is_accumulator_16bit_mode() {
+          let value = self.mem_read_u16(addr).wrapping_add(1);
+          self.mem_write_u16(addr, value);
+          value
+        } else {
+          let value = self.mem_read(addr).wrapping_add(1);
+          self.mem_write(addr, value);
+          value as u16
+        };
         self.update_zero_and_negative_flags(value);
-      */
-      todo!("inc");
+      }
     }
 
     pub fn dey(&mut self, mode: &AddressingMode) {
@@ -1018,7 +1036,8 @@ impl CPU {
       if mode == &AddressingMode::Accumulator {
         let value = self.get_register_a().wrapping_sub(1);
         self.set_register_a(value);
-        self.update_zero_and_negative_flags(value);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
       } else {
         let addr = self.get_operand_address(mode);
         let value = if self.is_accumulator_16bit_mode() {

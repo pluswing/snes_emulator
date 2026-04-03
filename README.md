@@ -27,9 +27,9 @@ BRK
 ✅ DEX
 ✅ DEY
 ✅ EOR
-INC
+✅ INC
 ✅ INX
-INY
+✅ INY
 JMP
 JSR
 ✅ LDA

@@ -124,10 +124,10 @@ fn main() {
       // "aa.e", // TAX
       // "aa.n",
       // "e8.e", // INX
-      "57.e",
-      "57.n",
+      "4c.e",
+      "4c.n",
     ];
-    // let targets = testcase("EOR");
+    let targets = testcase("JMP");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
