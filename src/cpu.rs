@@ -279,10 +279,20 @@ impl CPU {
                 addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Indirect => {
-              todo!("Absolute_Indirect");
+              // アドレス部のアドレスから16bitを読み込み、それを下位16bit、上位8bitをプログラムバンクレジスタとしたアドレスに目的のデータが格納されています。
+              // ($1234)のように表します。
+              let base = self.wrapped_mem_read_u16(pc) as u32;
+              let base = self.wrapped_mem_read_u16(base) as u32;
+              let bank = self.program_bank as u32;
+              (bank << 16) | base
             }
             AddressingMode::Absolute_Indexed_Indirect => {
-              todo!("Absolute_Indexed_Indirect");
+              // アドレス部の内容にXレジスタを足したアドレスから16bitを読み込み、それを下位16bit、上位8bitをプログラムバンクレジスタとしたアドレスに目的のデータが格納されています。
+              // 絶対インデクスYインダイレクトモードはありません。($1234, x)のように表します。
+              let base = self.wrapped_mem_read_u16(pc);
+              let base = base.wrapping_add(self.get_register_x()) & 0x00FFFF;
+              let addr = ((self.program_bank as u32) << 16) | base as u32;
+              addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Indirect_Long => {
               // アドレス部のアドレスから24bitを読み込んだそのアドレスに目的のデータが格納されています。
@@ -1407,11 +1417,12 @@ impl CPU {
 
     fn sign_bit(&self, value: u16) -> bool {
       if self.is_accumulator_16bit_mode() {
-        (value & 0x8000) != 0
+        (value & 0x8000) == 0
       } else {
-        (value & 0x0080) != 0
+        (value & 0x0080) == 0
       }
     }
+
 /*
     fn _bcd2(&self, value: u16) -> u16 {
       if (self.status & FLAG_DECIMAL) == 0 {
@@ -1442,36 +1453,68 @@ impl CPU {
     }
  */
     pub fn adc(&mut self, mode: &AddressingMode) {
+        if (self.status & FLAG_DECIMAL) != 0 {
+          // デシマルモード
+          let addr = self.get_operand_address(mode);
+          let value = self.mem_read_u16(addr);
+          let a: u16 = self.get_register_a();
+          let mut carry = (self.status & FLAG_CARRY) as u16;
+
+          let mut result: u16 = 0;
+          let mut value_l = value;
+          let mut value_r = a;
+          for i in [0, 1, 2, 3] {
+            let mut sum = (value_l & 0x000F) + (value_r & 0x000F) + carry;
+            if sum > 9 {
+              sum += 6;
+              sum &= 0x000F;
+              carry = 1;
+            } else {
+              carry = 0;
+            }
+            result = result | sum << (i * 4);
+            value_l >>= 4;
+            value_r >>= 4;
+          }
+          println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
+
+          let overflow = self.sign_bit(a) == self.sign_bit(value)
+            && self.sign_bit(value) != self.sign_bit(result);
+
+          self.set_register_a(result);
+          let a = self.get_register_a();
+
+          self.status = if result > 0xFF { // TODO 16bitモード対応
+              self.status | FLAG_CARRY
+          } else {
+              self.status & !FLAG_CARRY
+          };
+          self.status = if overflow {
+              self.status | FLAG_OVERFLOW
+          } else {
+              self.status & !FLAG_OVERFLOW
+          };
+
+          self.update_zero_and_negative_flags(a);
+
+          return;
+        }
+        // 通常時
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_u16(addr);
-        // print!("V {:06X}({})", value, value);
-        // let value = self._bcd2(value);
-        // println!(" ==> {:06X}({})", value, value);
 
         let carry = (self.status & FLAG_CARRY) as u16;
         let (rhs, carry_flag1) = self.overflowing_add(value, carry);
         let a = self.get_register_a();
-        // print!("A {:06X}", a);
-        // let a = self._bcd2(a);
-        // println!(" ==> {:06X}({})", a, a);
 
         let (n, carry_flag2) = self.overflowing_add(a, rhs);
-        // print!("STORE {:06X}", n);
-        // let n = self._bcd3(n);
-        // println!(" ==> {:06X}", n);
-        // let carry_flag3 = if self.status & FLAG_DECIMAL == 0 { false } else { n > 99};
-
-        // V:00DC A:00B2 C:0001 R:0095
-        //    142    112      1 = 0x255
-        // F5
-
-        println!("V:{:04X} A:{:04X} C:{:04X} R:{:04X}", value, a, carry, n);
         let overflow = self.sign_bit(a) == self.sign_bit(value)
             && self.sign_bit(value) != self.sign_bit(n);
 
         self.set_register_a(n);
+        let a = self.get_register_a();
 
-        self.status = if carry_flag1 || carry_flag2 /* || carry_flag3 */ {
+        self.status = if carry_flag1 || carry_flag2 {
             self.status | FLAG_CARRY
         } else {
             self.status & !FLAG_CARRY
@@ -1482,7 +1525,7 @@ impl CPU {
             self.status & !FLAG_OVERFLOW
         };
 
-        self.update_zero_and_negative_flags(n)
+        self.update_zero_and_negative_flags(a)
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
