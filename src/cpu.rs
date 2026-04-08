@@ -243,7 +243,11 @@ impl CPU {
             },
             AddressingMode::Absolute => {
               // アドレス部の内容が目的のデータが格納されている16bitアドレスを表します。$1234のように表します。
-              let addr = self.wrapped_mem_read_u16(pc) as u32;
+              let addr = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                self.mem_read_u16(pc) as u32
+              } else {
+                self.wrapped_mem_read_u16(pc) as u32
+              };
               ((self.data_bank as u32) << 16) | addr
             }
             AddressingMode::Absolute_Long => {
@@ -292,7 +296,8 @@ impl CPU {
               let base = self.wrapped_mem_read_u16(pc);
               let base = base.wrapping_add(self.get_register_x()) & 0x00FFFF;
               let addr = ((self.program_bank as u32) << 16) | base as u32;
-              addr & 0xFFFFFF
+              let addr = self.wrapped_mem_read_u16(addr & 0xFFFFFF);
+              addr as u32
             }
             AddressingMode::Absolute_Indirect_Long => {
               // アドレス部のアドレスから24bitを読み込んだそのアドレスに目的のデータが格納されています。
@@ -946,14 +951,20 @@ impl CPU {
     }
 
     pub fn jsr(&mut self, mode: &AddressingMode) {
-      /*
-        let addr = self.get_operand_address(mode);
-        self._push_u16(self.program_counter + 2 - 1);
-        self.program_counter = addr;
-        // 後で+2するので整合性のため-2しておく
-        self.program_counter -= 2;
-      */
-      todo!("jsr");
+      // opscodes.rsのcall関数内でprogram_counterを変更しないようにする必要あり。
+      let bytes = match mode {
+        AddressingMode::Absolute_Long => 4,
+        _ => 3
+      };
+      let addr = self.get_operand_address(mode);
+      self._push_u16(self.program_counter + bytes - 1 - 1);
+      self.program_counter = addr as u16;
+      match mode {
+        AddressingMode::Absolute_Long => {
+          self.program_bank = (addr >> 16) as u8
+        },
+        _ => {}
+      }
     }
 
     pub fn _push(&mut self, value: u8) {
@@ -987,11 +998,17 @@ impl CPU {
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {
+        // opscodes.rsのcall関数内でprogram_counterを変更しないようにする必要あり。
         let addr = self.get_operand_address(mode);
         println!("ADDR: {:06X}", addr);
         self.program_counter = addr as u16;
-        if *mode != AddressingMode::Absolute && *mode != AddressingMode::Absolute_Indirect && *mode == AddressingMode::Absolute_Indexed_Indirect {
+        match mode {
+          AddressingMode::Absolute_Long
+          | AddressingMode::Absolute_Indirect_Long => {
           self.program_bank = (addr >> 16) as u8;
+          }
+          _ => {
+          }
         }
     }
 

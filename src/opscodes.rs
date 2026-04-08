@@ -1179,7 +1179,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
       } else {
         op.emulation.bytes
       };
-      cpu.program_counter = cpu.program_counter.wrapping_add(bytes - 1);
+      // cpu.program_counter = cpu.program_counter.wrapping_add(bytes - 1);
     }
 
 
