@@ -31,7 +31,7 @@ BRK
 ✅ INX
 ✅ INY
 ✅ JMP
-JSR
+✅ JSR
 ✅ LDA
 LDX
 LDY

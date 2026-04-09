@@ -124,10 +124,10 @@ fn main() {
       // "aa.e", // TAX
       // "aa.n",
       // "e8.e", // INX
-      "20.e",
-      "20.n",
+      "22.e",
+      "22.n",
     ];
-    let targets = testcase("JSR");
+    let targets = testcase("INC");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -136,10 +136,6 @@ fn main() {
       let mut cpu = CPU::new();
 
       for data in &deserialized {
-
-        if data.Initial.P & (1 << 3) == 0 {
-          continue;
-        }
         // cpuにInitialをセット
         cpu.program_counter = data.Initial.Pc;
         cpu.stack_pointer = data.Initial.S;

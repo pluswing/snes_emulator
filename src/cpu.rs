@@ -122,6 +122,7 @@ pub struct CPU {
     pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
     pub memory: Vec<u8>, // size=0xFFFFFF
     // pub bus: Bus<'a>,
+    current_op: OpCode,
 }
 
 pub static mut IN_TRACE: bool = false;
@@ -161,6 +162,12 @@ impl CPU {
             mode: MODE_16BIT,
             memory: vec![0; 0x100_0000],
             // bus: bus,
+            current_op: OpCode::new(
+              0,
+              "",
+              OpInfo::new(0, 0),
+              OpInfo::new(0, 0),
+              AddressingMode::Absolute),
         }
     }
 
@@ -492,14 +499,21 @@ impl CPU {
         // self.mem_write_u16(0xFFFC, 0x8000);
     }
 
-    fn apply_mode(&mut self) {
+    fn apply_mode(&mut self, force: bool) {
       if self.is_emulation_mode() {
-        self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF)
+        if force {
+          self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
+          return
+        }
+        // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
+        if self.current_op.addressing_mode != AddressingMode::Absolute_Long {
+          self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
+          return
+        }
       }
     }
 
     pub fn run(&mut self) {
-        self.apply_mode();
         // if let Some(_nmi) = self.bus.poll_nmi_status() {
         //     self.interrupt_nmi();
         // }
@@ -515,6 +529,8 @@ impl CPU {
         self.program_counter = self.program_counter.wrapping_add(1);
 
         let op = CPU_OPS_CODES.get(&opscode);
+        self.current_op = op.unwrap().clone();
+        self.apply_mode(true);
         match op {
             Some(op) => {
 
@@ -528,6 +544,7 @@ impl CPU {
             }
             _ => {} // panic!("no implementation {:<02X}", opscode),
         }
+        self.apply_mode(true);
     }
 /* ファミコンの割り込み実装。
     fn interrupt_nmi(&mut self) {
@@ -957,22 +974,24 @@ impl CPU {
         _ => 3
       };
       let addr = self.get_operand_address(mode);
-      self._push_u16(self.program_counter + bytes - 1 - 1);
-      self.program_counter = addr as u16;
       match mode {
         AddressingMode::Absolute_Long => {
-          self.program_bank = (addr >> 16) as u8
+          self._push(self.program_bank);
+          self.program_bank = (addr >> 16) as u8;
         },
         _ => {}
       }
+      let pc = self.program_counter as u32 + bytes - 1 - 1;
+      self._push_u16(pc as u16);
+      self.program_counter = addr as u16;
     }
 
     pub fn _push(&mut self, value: u8) {
       let addr = self.stack_pointer as u32;
-      trace!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
+      println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
       self.stack_pointer = self.stack_pointer.wrapping_sub(1);
-      self.apply_mode();
+      self.apply_mode(false);
     }
 
     pub fn _pop(&mut self) -> u8 {
@@ -987,6 +1006,7 @@ impl CPU {
     }
 
     pub fn _push_u16(&mut self, value: u16) {
+        println!("PUSH u16");
         self._push((value >> 8) as u8);
         self._push((value & 0x00FF) as u8);
     }
