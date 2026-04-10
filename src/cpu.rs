@@ -334,10 +334,15 @@ impl CPU {
               addr & 0x00FFFF
             }
             AddressingMode::Direct_Page_Indexed_by_Y => {
-              // FIXME 要確認
-              let addr = self.mem_read(pc);
-              let addr = self.direct_page.wrapping_add(addr as u16) as u32;
-              addr.wrapping_add(self.get_register_y() as u32)
+              let addr = self.mem_read(pc) as u32;
+              let dp = self.direct_page as u32;
+              let addr = dp.wrapping_add(addr);
+              let addr = if (dp & 0x00FF) == 0x00 && self.is_emulation_mode() {
+                (addr & 0xFF00) | ((addr + self.get_register_y() as u32) & 0x00FF)
+              } else {
+                addr.wrapping_add(self.get_register_y() as u32)
+              };
+              addr & 0x00FFFF
             }
             AddressingMode::Direct_Page_Indirect => {
               // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから16bitを読み込み、それを下位16bit、DBレジスタを上位8bitとしたアドレスに目的のデータが格納されています。
@@ -469,11 +474,21 @@ impl CPU {
         self.mem_write(pos + 1, hi);
     }
 
+    pub fn mem_read_auto(&mut self, pos: u32) -> u16 {
+        let lo = self.mem_read(pos) as u16;
+        if self.is_accumulator_16bit_mode() {
+          let hi = self.mem_read(pos + 1) as u16;
+          (hi << 8) | (lo as u16)
+        } else {
+          lo
+        }
+    }
+
     pub fn mem_write_auto(&mut self, pos: u32, data: u16) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0x00FF) as u8;
         self.mem_write(pos, lo);
-        if self.is_native_mode() {
+        if self.is_accumulator_16bit_mode() {
           self.mem_write(pos + 1, hi);
         }
     }
@@ -935,23 +950,19 @@ impl CPU {
     }
 
     pub fn ldy(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
-        self.register_y = value;
-        self.update_zero_and_negative_flags(self.register_y);
-      */
-      todo!("ldy");
+        let value = self.mem_read_u16(addr);
+        self.set_register_y(value);
+        let y = self.get_register_y();
+        self.update_zero_and_negative_flags_xy(y);
     }
 
     pub fn ldx(&mut self, mode: &AddressingMode) {
-      /*
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
-        self.register_x = value;
-        self.update_zero_and_negative_flags(self.register_x);
-      */
-      todo!("ldx");
+        let value = self.mem_read_u16(addr);
+        self.set_register_x(value);
+        let x = self.get_register_x();
+        self.update_zero_and_negative_flags_xy(x);
     }
 
     pub fn lda(&mut self, mode: &AddressingMode) {
@@ -1328,28 +1339,27 @@ impl CPU {
     }
 
     pub fn lsr(&mut self, mode: &AddressingMode) {
-      /*
-        let (value, carry) = if mode == &AddressingMode::Accumulator {
-            let carry = self.register_a & 0x01;
-            self.register_a = self.register_a / 2;
-            (self.register_a, carry)
-        } else {
-            let addr = self.get_operand_address(mode);
-            let value = self.mem_read(addr);
-            let carry = value & 0x01;
-            let value = value / 2;
-            self.mem_write(addr, value);
-            (value, carry)
-        };
+      let (value, carry) = if mode == &AddressingMode::Accumulator {
+          let a = self.get_register_a();
+          let carry = a & 0x01;
+          let a = a >> 1;
+          self.set_register_a(a);
+          (self.get_register_a(), carry)
+      } else {
+          let addr = self.get_operand_address(mode);
+          let value = self.mem_read_auto(addr);
+          let carry = value & 0x01;
+          let value = value >> 1;
+          self.mem_write_auto(addr, value);
+          (value, carry)
+      };
 
-        self.status = if carry == 1 {
-            self.status | FLAG_CARRY
-        } else {
-            self.status & !FLAG_CARRY
-        };
-        self.update_zero_and_negative_flags(value);
-      */
-      todo!("lsr");
+      self.status = if carry == 1 {
+          self.status | FLAG_CARRY
+      } else {
+          self.status & !FLAG_CARRY
+      };
+      self.update_zero_and_negative_flags(value);
     }
 
     fn overflowing_mul(&self, lhs: u16, rhs: u16) -> (u16, bool) {

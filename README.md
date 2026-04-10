@@ -33,9 +33,9 @@ BRK
 ✅ JMP
 ✅ JSR
 ✅ LDA
-LDX
-LDY
-LSR
+✅ LDX
+✅ LDY
+✅ LSR
 MVN
 MVP
 NOP

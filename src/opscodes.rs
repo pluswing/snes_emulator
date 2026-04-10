@@ -2,6 +2,14 @@ use std::{collections::HashMap};
 use once_cell::sync::Lazy;
 use crate::cpu::{AddressingMode, CPU, FLAG_MEMORY_ACCUMULATOR_MODE, MODE_16BIT, OpCode, OpInfo};
 
+/*
+# 手書き修正箇所
+- JMP -> +byte コメントアウト
+- JSR -> +byte コメントアウト
+- LDX -> byte計算でindex 16 bitを見るように
+- LDY -> byte計算でindex 16 bitを見るように
+ */
+
 pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
   let mut m = HashMap::new();
   m.insert(0xD0, OpCode::new(0xD0, "BNE", OpInfo::new(2, 2), OpInfo::new(2, 2), AddressingMode::Program_Counter_Relative));
@@ -921,7 +929,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LDY" => {
       cpu.ldy(&op.addressing_mode);
-      let bytes = if cpu.is_accumulator_16bit_mode() {
+      let bytes = if cpu.is_index_register_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
@@ -1031,7 +1039,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 
   "LDX" => {
       cpu.ldx(&op.addressing_mode);
-      let bytes = if cpu.is_accumulator_16bit_mode() {
+      let bytes = if cpu.is_index_register_16bit_mode() {
         op.native.bytes
       } else {
         op.emulation.bytes
