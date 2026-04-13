@@ -656,6 +656,12 @@ impl CPU {
         todo!("stp")
     }
     pub fn mvn(&mut self, mode: &AddressingMode) {
+      // 連続したメモリブロックをコピーする
+      // Xインデックスレジスタは、ブロックの開始（最小）ソースアドレスを指定します。
+      // Yインデックスレジスタは、ブロックの開始（最小）宛先アドレスを指定します。
+      // Cアキュムレータは、ブロックの長さをバイト単位で指定し、そこから1を引いた値を指定します。
+      // 最初のオペランドバイトは、ブロックが格納される宛先バンクを指定します。
+      // 2番目のオペランドバイトは、ブロックの開始位置となるソースバンクを指定します。
         todo!("mvn")
     }
     pub fn xce(&mut self, mode: &AddressingMode) {
@@ -980,9 +986,10 @@ impl CPU {
 
     pub fn jsr(&mut self, mode: &AddressingMode) {
       // opscodes.rsのcall関数内でprogram_counterを変更しないようにする必要あり。
-      let bytes = match mode {
-        AddressingMode::Absolute_Long => 4,
-        _ => 3
+      let bytes = if self.is_accumulator_16bit_mode() {
+        self.current_op.native.bytes
+      } else {
+        self.current_op.emulation.bytes
       };
       let addr = self.get_operand_address(mode);
       match mode {
@@ -992,7 +999,9 @@ impl CPU {
         },
         _ => {}
       }
-      let pc = self.program_counter as u32 + bytes - 1 - 1;
+      let run_func_correction = 1;
+      let last_byte_correction = 1;
+      let pc = self.program_counter as u32 + bytes as u32 - run_func_correction - last_byte_correction;
       self._push_u16(pc as u16);
       self.program_counter = addr as u16;
     }
@@ -1510,14 +1519,16 @@ impl CPU {
           let mut result: u16 = 0;
           let mut value_l = value;
           let mut value_r = a;
-          for i in [0, 1, 2, 3] {
+          let mut overflow = false;
+          for i in if self.is_accumulator_16bit_mode() { vec![0, 1, 2, 3] } else { vec![0, 1] } {
             let mut sum = (value_l & 0x000F) + (value_r & 0x000F) + carry;
+            overflow = false;
+            carry = 0;
             if sum > 9 {
               sum += 6;
+              overflow = sum >= 0x000F;
               sum &= 0x000F;
               carry = 1;
-            } else {
-              carry = 0;
             }
             result = result | sum << (i * 4);
             value_l >>= 4;
@@ -1525,13 +1536,13 @@ impl CPU {
           }
           println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
 
-          let overflow = self.sign_bit(a) == self.sign_bit(value)
-            && self.sign_bit(value) != self.sign_bit(result);
+          // let overflow = self.sign_bit(a) == self.sign_bit(value)
+          //   && self.sign_bit(value) != self.sign_bit(result);
 
           self.set_register_a(result);
           let a = self.get_register_a();
 
-          self.status = if result > 0xFF { // TODO 16bitモード対応
+          self.status = if carry != 0 {
               self.status | FLAG_CARRY
           } else {
               self.status & !FLAG_CARRY
