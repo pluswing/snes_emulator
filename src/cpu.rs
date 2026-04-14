@@ -248,6 +248,11 @@ impl CPU {
               // アドレス部の内容が目的のデータとして利用されます。先頭に#をつけて#$1234のように表します。
               pc
             },
+            AddressingMode::Block_Move => {
+              // 下位8bitにsrc bank, 上位8bitにdest bankが入ります。
+              // MVN srds
+              self.mem_read_u16(pc) as u32
+            }
             AddressingMode::Absolute => {
               // アドレス部の内容が目的のデータが格納されている16bitアドレスを表します。$1234のように表します。
               let addr = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
@@ -659,10 +664,23 @@ impl CPU {
       // 連続したメモリブロックをコピーする
       // Xインデックスレジスタは、ブロックの開始（最小）ソースアドレスを指定します。
       // Yインデックスレジスタは、ブロックの開始（最小）宛先アドレスを指定します。
-      // Cアキュムレータは、ブロックの長さをバイト単位で指定し、そこから1を引いた値を指定します。
+      // Cアキュムレータ (=Aレジスタ)は、ブロックの長さをバイト単位で指定し、そこから1を引いた値を指定します。
       // 最初のオペランドバイトは、ブロックが格納される宛先バンクを指定します。
       // 2番目のオペランドバイトは、ブロックの開始位置となるソースバンクを指定します。
-        todo!("mvn")
+      let value = self.get_operand_address(mode);
+      let src_bank = (value & 0xFF00) >> 8;
+      let dest_bank = value & 0x00FF;
+
+      let src_addr = (src_bank << 16) | self.get_register_x() as u32;
+      let dest_addr = (dest_bank << 16) | self.get_register_y() as u32;
+      let copy_bytes = self.get_register_a() as u32;
+
+      for i in 0..copy_bytes {
+        let val = self.mem_read(src_addr + i);
+        self.mem_write(dest_addr + i, val);
+      }
+      self.set_register_a(0xFFFF);
+      self.data_bank = dest_bank as u8;
     }
     pub fn xce(&mut self, mode: &AddressingMode) {
         todo!("xce")
