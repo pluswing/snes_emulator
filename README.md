@@ -36,7 +36,7 @@ BRK
 ✅ LDX
 ✅ LDY
 ✅ LSR
-MVN
+MVN => nativeだけなんとか通した。
 MVP
 NOP
 ✅ ORA

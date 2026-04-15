@@ -209,6 +209,14 @@ impl CPU {
       a
     }
 
+    pub fn set_register_c(&mut self, value: u16) {
+      self.register_a = value
+    }
+
+    pub fn get_register_c(&mut self) -> u16 {
+      self.register_a
+    }
+
     pub fn set_register_x(&mut self, value: u16) {
       if self.is_index_register_16bit_mode() {
         self.register_x = value
@@ -671,15 +679,29 @@ impl CPU {
       let src_bank = (value & 0xFF00) >> 8;
       let dest_bank = value & 0x00FF;
 
-      let src_addr = (src_bank << 16) | self.get_register_x() as u32;
-      let dest_addr = (dest_bank << 16) | self.get_register_y() as u32;
-      let copy_bytes = self.get_register_a() as u32;
+      let copy_bytes = self.get_register_c() as u32 + 1;
+
+      // FIXME! for test
+      let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
+      println!("COPY_BYTES: {:04X}", copy_bytes);
 
       for i in 0..copy_bytes {
-        let val = self.mem_read(src_addr + i);
-        self.mem_write(dest_addr + i, val);
+        let src_addr = (src_bank << 16) | self.get_register_x() as u32;
+        let dest_addr = (dest_bank << 16) | self.get_register_y() as u32;
+
+        let val = self.mem_read(src_addr);
+        self.mem_write(dest_addr, val);
+
+        let x = self.get_register_x();
+        self.set_register_x(x.wrapping_add(1));
+
+        let y: u16 = self.get_register_y();
+        self.set_register_y(y.wrapping_add(1));
+
+        let c = self.get_register_c();
+        self.set_register_c(c.wrapping_sub(1));
       }
-      self.set_register_a(0xFFFF);
+
       self.data_bank = dest_bank as u8;
     }
     pub fn xce(&mut self, mode: &AddressingMode) {
