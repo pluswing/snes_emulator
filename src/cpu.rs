@@ -31,7 +31,7 @@ pub enum AddressingMode {
     // added
     Program_Counter_Relative, // Program Counter Relative
     Program_Counter_Relative_Long, // Program Counter Relative Long
-    Stack,
+    Stack, // = Immediate
     Block_Move, // Block Move
 
     // TODO ??
@@ -252,7 +252,7 @@ impl CPU {
     fn get_operand_address(&mut self, mode: &AddressingMode) -> u32 {
         let pc = self.pc();
         match mode {
-            AddressingMode::Immediate => {
+            AddressingMode::Immediate | AddressingMode::Stack => {
               // アドレス部の内容が目的のデータとして利用されます。先頭に#をつけて#$1234のように表します。
               pc
             },
@@ -534,7 +534,10 @@ impl CPU {
           return
         }
         // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
-        if self.current_op.addressing_mode != AddressingMode::Absolute_Long {
+        // StackはPEAのテストで必要だった。
+        if self.current_op.addressing_mode != AddressingMode::Absolute_Long &&
+          self.current_op.addressing_mode != AddressingMode::Stack {
+
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
           return
         }
@@ -609,7 +612,34 @@ impl CPU {
       self._branch(mode, 0x00, false);
     }
     pub fn mvp(&mut self, mode: &AddressingMode) {
-        todo!("mvp")
+      let value = self.get_operand_address(mode);
+      let src_bank = (value & 0xFF00) >> 8;
+      let dest_bank = value & 0x00FF;
+
+      let copy_bytes = self.get_register_c() as u32 + 1;
+
+      // FIXME! for test
+      // let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
+      // println!("COPY_BYTES: {:04X}", copy_bytes);
+
+      for i in 0..copy_bytes {
+        let src_addr = (src_bank << 16) | self.get_register_x() as u32;
+        let dest_addr = (dest_bank << 16) | self.get_register_y() as u32;
+
+        let val = self.mem_read(src_addr);
+        self.mem_write(dest_addr, val);
+
+        let x = self.get_register_x();
+        self.set_register_x(x.wrapping_sub(1));
+
+        let y: u16 = self.get_register_y();
+        self.set_register_y(y.wrapping_sub(1));
+
+        let c = self.get_register_c();
+        self.set_register_c(c.wrapping_sub(1));
+      }
+
+      self.data_bank = dest_bank as u8;
     }
     pub fn stz(&mut self, mode: &AddressingMode) {
         todo!("stz")
@@ -682,8 +712,8 @@ impl CPU {
       let copy_bytes = self.get_register_c() as u32 + 1;
 
       // FIXME! for test
-      let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
-      println!("COPY_BYTES: {:04X}", copy_bytes);
+      // let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
+      // println!("COPY_BYTES: {:04X}", copy_bytes);
 
       for i in 0..copy_bytes {
         let src_addr = (src_bank << 16) | self.get_register_x() as u32;
@@ -735,7 +765,9 @@ impl CPU {
         todo!("tyx")
     }
     pub fn pea(&mut self, mode: &AddressingMode) {
-        todo!("pea")
+        let addr = self.get_operand_address(mode);
+        let value= self.mem_read_u16(addr);
+        self._push_u16(value as u16);
     }
     pub fn wai(&mut self, mode: &AddressingMode) {
         todo!("wai")

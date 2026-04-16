@@ -127,7 +127,7 @@ fn main() {
       // "54.e",
       "54.n",
     ];
-    // let targets = testcase("MVN");
+    let targets = testcase("PEA");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -157,6 +157,14 @@ fn main() {
         let arg2 = cpu.mem_read(cpu.pc()+2);
         println!("---------------------");
         println!("RUN name: \"{}\" {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
+        // println!("cycles:");
+        // for c in &data.Cycles {
+        //   if c.1.is_some() {
+        //     print!("{:06X} {:02X} {}, ", c.0, c.1.unwrap(), c.2)
+        //   } else {
+        //     print!("{:06X} __ {}, ", c.0, c.2)
+        //   }
+        // }
         println!("initial:      NVMXDIZC\n{:?}", data.Initial);
         println!("expected:     NVMXDIZC\n{:?}", data.Final);
         cpu.run();

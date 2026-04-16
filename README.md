@@ -36,11 +36,11 @@ BRK
 ✅ LDX
 ✅ LDY
 ✅ LSR
-MVN => nativeだけなんとか通した。
-MVP
-NOP
+✅ MVN => 一応OK.テストは失敗する(途中で抜ける必要があるため。)
+✅ MVP => 一応OK.テストは失敗する(途中で抜ける必要があるため。)
+✅ NOP
 ✅ ORA
-PEA
+✅ PEA
 PEI
 PER
 PHA
