@@ -41,10 +41,10 @@ BRK
 ✅ NOP
 ✅ ORA
 ✅ PEA
-PEI
-PER
-PHA
-PHB
+✅ PEI
+✅ PER
+✅ PHA
+✅ PHB
 PHD
 PHK
 PHP

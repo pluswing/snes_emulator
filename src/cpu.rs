@@ -648,7 +648,11 @@ impl CPU {
         todo!("rep")
     }
     pub fn pei(&mut self, mode: &AddressingMode) {
-        todo!("pei")
+      let addr = self.get_operand_address(mode);
+      let addr = self.mem_read(addr);
+      let addr = self.direct_page.wrapping_add(addr as u16) & 0x00FFFF;
+      let value = self.wrapped_mem_read_u16(addr as u32);
+      self._push_u16(value as u16);
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
         todo!("plx")
@@ -782,10 +786,15 @@ impl CPU {
         todo!("plb")
     }
     pub fn per(&mut self, mode: &AddressingMode) {
-        todo!("per")
+      let pc = self.get_operand_address(mode);
+      let value = self.mem_read_u16(pc);
+      let arg_bytes = self.current_op.native.bytes - 1;
+      let pc = pc + arg_bytes as u32;
+      let value = (pc + value as u32) & 0x00FFFF;
+      self._push_u16(value as u16);
     }
     pub fn phb(&mut self, mode: &AddressingMode) {
-        todo!("phb")
+      self._push(self.data_bank);
     }
 
     pub fn anc(&mut self, mode: &AddressingMode) {
@@ -1017,10 +1026,12 @@ impl CPU {
     }
 
     pub fn pha(&mut self, mode: &AddressingMode) {
-      /*
-        self._push(self.register_a);
-      */
-      todo!("pha");
+      let a = self.get_register_a();
+      if self.is_accumulator_16bit_mode() {
+        self._push_u16(a);
+      } else {
+        self._push(a as u8);
+      }
     }
 
     pub fn nop(&mut self, mode: &AddressingMode) {
