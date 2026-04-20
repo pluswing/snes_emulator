@@ -603,7 +603,12 @@ impl CPU {
 */
 
     pub fn phx(&mut self, mode: &AddressingMode) {
-        todo!("phx")
+      let x = self.get_register_x();
+      if self.is_index_register_16bit_mode() {
+        self._push_u16(x);
+      } else {
+        self._push(x as u8);
+      }
     }
     pub fn ply(&mut self, mode: &AddressingMode) {
         todo!("ply")
@@ -658,7 +663,12 @@ impl CPU {
         todo!("plx")
     }
     pub fn phy(&mut self, mode: &AddressingMode) {
-        todo!("phy")
+      let y = self.get_register_y();
+      if self.is_index_register_16bit_mode() {
+        self._push_u16(y);
+      } else {
+        self._push(y as u8);
+      }
     }
     pub fn wdm(&mut self, mode: &AddressingMode) {
         todo!("wdm")
@@ -694,7 +704,7 @@ impl CPU {
         todo!("tdc")
     }
     pub fn phk(&mut self, mode: &AddressingMode) {
-        todo!("phk")
+        self._push(self.program_bank);
     }
     pub fn tcd(&mut self, mode: &AddressingMode) {
         todo!("tcd")
@@ -760,7 +770,7 @@ impl CPU {
         todo!("xba")
     }
     pub fn phd(&mut self, mode: &AddressingMode) {
-        todo!("phd")
+        self._push_u16(self.direct_page);
     }
     pub fn tsc(&mut self, mode: &AddressingMode) {
         todo!("tsc")
@@ -770,7 +780,7 @@ impl CPU {
     }
     pub fn pea(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        let value= self.mem_read_u16(addr);
+        let value = self.mem_read_u16(addr);
         self._push_u16(value as u16);
     }
     pub fn wai(&mut self, mode: &AddressingMode) {
@@ -1014,15 +1024,18 @@ impl CPU {
     }
 
     pub fn php(&mut self, mode: &AddressingMode) {
-        self._push(self.status | FLAG_BREAK | FLAG_BREAK2);
+        // fullsnes は、PHP は常にbreak フラグに 1 を書き込むと主張している。
+        self._push(self.status);
     }
 
     pub fn pla(&mut self, mode: &AddressingMode) {
-      /*
-        self.register_a = self._pop();
-        self.update_zero_and_negative_flags(self.register_a);
-      */
-      todo!("pla");
+      let a = if self.is_accumulator_16bit_mode() {
+        self._pop_u16()
+      } else {
+        self._pop() as u16
+      };
+      self.set_register_a(a);
+      self.update_zero_and_negative_flags(a);
     }
 
     pub fn pha(&mut self, mode: &AddressingMode) {
@@ -1097,15 +1110,22 @@ impl CPU {
       self.apply_mode(false);
     }
 
+    fn wrapping_add_stack_pointer(&mut self, rhs: u16) -> u16 {
+      let lhs = self.stack_pointer;
+      self.stack_pointer = if self.is_native_mode() {
+        lhs.wrapping_add(rhs)
+      } else {
+        (lhs as u8).wrapping_add(rhs as u8) as u16 | 0x0100
+      };
+      self.stack_pointer
+    }
+
     pub fn _pop(&mut self) -> u8 {
-      /*
-        self.stack_pointer = self.stack_pointer.wrapping_add(1);
-        let addr = 0x0100 + self.stack_pointer as u16;
-        trace!("STACK POP: {:02X}", self.stack_pointer);
-        self.mem_read(addr)
-      */
-      todo!("_pop");
-      0
+      let addr = self.wrapping_add_stack_pointer(1) as u32;
+      let value = self.mem_read(addr);
+      println!("STACK POP: {:04X} => {:02X}", addr, value);
+      self.apply_mode(false);
+      value
     }
 
     pub fn _push_u16(&mut self, value: u16) {

@@ -45,12 +45,12 @@ BRK
 ✅ PER
 ✅ PHA
 ✅ PHB
-PHD
-PHK
-PHP
-PHX
-PHY
-PLA
+✅ PHD
+✅ PHK
+✅ PHP
+✅ PHX
+✅ PHY
+✅ PLA
 PLB
 PLD
 PLP
