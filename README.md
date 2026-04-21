@@ -51,8 +51,8 @@ BRK
 ✅ PHX
 ✅ PHY
 ✅ PLA
-PLB
-PLD
+✅ PLB
+✅ PLD
 PLP
 PLX
 PLY

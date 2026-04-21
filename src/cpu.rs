@@ -761,7 +761,8 @@ impl CPU {
         todo!("tsb")
     }
     pub fn pld(&mut self, mode: &AddressingMode) {
-        todo!("pld")
+      self.direct_page = self._pop_u16();
+      self._update_zero_and_negative_flags(self.direct_page, true);
     }
     pub fn tcs(&mut self, mode: &AddressingMode) {
         todo!("tcs")
@@ -793,7 +794,8 @@ impl CPU {
         todo!("trb")
     }
     pub fn plb(&mut self, mode: &AddressingMode) {
-        todo!("plb")
+      self.data_bank = self._pop();
+      self._update_zero_and_negative_flags(self.data_bank as u16, false);
     }
     pub fn per(&mut self, mode: &AddressingMode) {
       let pc = self.get_operand_address(mode);
@@ -1106,8 +1108,17 @@ impl CPU {
       let addr = self.stack_pointer as u32;
       println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
-      self.stack_pointer = self.stack_pointer.wrapping_sub(1);
-      self.apply_mode(false);
+      self.wrapping_sub_stack_pointer(1);
+    }
+
+    fn wrapping_sub_stack_pointer(&mut self, rhs: u16) -> u16 {
+      let lhs = self.stack_pointer;
+      self.stack_pointer = if self.is_native_mode() {
+        lhs.wrapping_sub(rhs)
+      } else {
+        (lhs).wrapping_sub(rhs) as u16
+      };
+      self.stack_pointer
     }
 
     fn wrapping_add_stack_pointer(&mut self, rhs: u16) -> u16 {
@@ -1115,7 +1126,7 @@ impl CPU {
       self.stack_pointer = if self.is_native_mode() {
         lhs.wrapping_add(rhs)
       } else {
-        (lhs as u8).wrapping_add(rhs as u8) as u16 | 0x0100
+        (lhs).wrapping_add(rhs) as u16
       };
       self.stack_pointer
     }
@@ -1124,7 +1135,6 @@ impl CPU {
       let addr = self.wrapping_add_stack_pointer(1) as u32;
       let value = self.mem_read(addr);
       println!("STACK POP: {:04X} => {:02X}", addr, value);
-      self.apply_mode(false);
       value
     }
 
@@ -1135,6 +1145,9 @@ impl CPU {
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
+        // FIXME wrappedで読まないといけない
+        println!("POPu16 SP: {:04X}", self.stack_pointer);
+
         let lo = self._pop();
         let hi = self._pop();
         ((hi as u16) << 8) | lo as u16
@@ -1690,26 +1703,29 @@ impl CPU {
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
-        self._update_zero_and_negative_flags(result, true);
+        self._update_zero_and_negative_flags_by_register(result, true);
     }
 
     fn update_zero_and_negative_flags_xy(&mut self, result: u16) {
-        self._update_zero_and_negative_flags(result, false);
+        self._update_zero_and_negative_flags_by_register(result, false);
     }
 
-    fn _update_zero_and_negative_flags(&mut self, result: u16, mode_a: bool) {
-        self.status = if result == 0 {
-            self.status | FLAG_ZERO
-        } else {
-            self.status & !FLAG_ZERO
-        };
+    fn _update_zero_and_negative_flags_by_register(&mut self, result: u16, mode_a: bool) {
         let mode = if mode_a {
           self.is_accumulator_16bit_mode()
         } else {
           self.is_index_register_16bit_mode()
         };
+        self._update_zero_and_negative_flags(result, mode);
+    }
 
-        let test_bit = if mode { 0x8000 } else { 0x0080 };
+    fn _update_zero_and_negative_flags(&mut self, result: u16, mode16bit: bool) {
+        let test_bit = if mode16bit { 0x8000 } else { 0x0080 };
+        self.status = if result == 0 {
+            self.status | FLAG_ZERO
+        } else {
+            self.status & !FLAG_ZERO
+        };
         self.status = if (result & test_bit) != 0 {
             self.status | FLAG_NEGATIVE
         } else {
