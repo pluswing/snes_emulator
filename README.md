@@ -53,9 +53,9 @@ BRK
 ✅ PLA
 ✅ PLB
 ✅ PLD
-PLP
-PLX
-PLY
+✅ PLP
+✅ PLX
+✅ PLY
 REP
 ROL
 ROR

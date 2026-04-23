@@ -611,7 +611,13 @@ impl CPU {
       }
     }
     pub fn ply(&mut self, mode: &AddressingMode) {
-        todo!("ply")
+      let y = if self.is_index_register_16bit_mode() {
+        self._pop_u16()
+      } else {
+        self._pop() as u16
+      };
+      self.set_register_y(y);
+      self.update_zero_and_negative_flags_xy(y);
     }
     pub fn bra(&mut self, mode: &AddressingMode) {
       self._branch(mode, 0x00, false);
@@ -660,7 +666,13 @@ impl CPU {
       self._push_u16(value as u16);
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
-        todo!("plx")
+      let x = if self.is_index_register_16bit_mode() {
+        self._pop_u16()
+      } else {
+        self._pop() as u16
+      };
+      self.set_register_x(x);
+      self.update_zero_and_negative_flags_xy(x);
     }
     pub fn phy(&mut self, mode: &AddressingMode) {
       let y = self.get_register_y();
@@ -1022,7 +1034,19 @@ impl CPU {
     }
 
     pub fn plp(&mut self, mode: &AddressingMode) {
-        self.status = self._pop() & !FLAG_BREAK | FLAG_BREAK2;
+        if self.is_native_mode() {
+          self.status = self._pop();
+          if !self.is_index_register_16bit_mode() {
+            self.register_x = self.register_x & 0x00FF;
+            self.register_y = self.register_y & 0x00FF;
+          }
+        } else {
+          // = FLAG_BREAK, FLAG_BREAK2
+          let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
+          self.status = (self._pop() & mask)
+            | (self.status & FLAG_MEMORY_ACCUMULATOR_MODE)
+            | (self.status & FLAG_INDEX_REGISTER_MODE);
+        }
     }
 
     pub fn php(&mut self, mode: &AddressingMode) {
@@ -1108,49 +1132,55 @@ impl CPU {
       let addr = self.stack_pointer as u32;
       println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
-      self.wrapping_sub_stack_pointer(1);
+      self.stack_pointer = self.wrapping_sub(self.stack_pointer, 1);
     }
 
-    fn wrapping_sub_stack_pointer(&mut self, rhs: u16) -> u16 {
-      let lhs = self.stack_pointer;
-      self.stack_pointer = if self.is_native_mode() {
+    fn wrapping_sub(&mut self, lhs: u16, rhs: u16) -> u16 {
+      if self.is_native_mode() {
         lhs.wrapping_sub(rhs)
       } else {
-        (lhs).wrapping_sub(rhs) as u16
-      };
-      self.stack_pointer
+        lhs.wrapping_sub(rhs) as u16
+      }
     }
 
-    fn wrapping_add_stack_pointer(&mut self, rhs: u16) -> u16 {
-      let lhs = self.stack_pointer;
-      self.stack_pointer = if self.is_native_mode() {
+    fn wrapping_add(&mut self, lhs: u16, rhs: u16) -> u16 {
+      if self.is_native_mode() {
         lhs.wrapping_add(rhs)
       } else {
-        (lhs).wrapping_add(rhs) as u16
-      };
-      self.stack_pointer
+        lhs.wrapping_add(rhs) as u16
+      }
     }
 
     pub fn _pop(&mut self) -> u8 {
-      let addr = self.wrapping_add_stack_pointer(1) as u32;
-      let value = self.mem_read(addr);
-      println!("STACK POP: {:04X} => {:02X}", addr, value);
+      self.stack_pointer = self.wrapping_add(self.stack_pointer, 1);
+      self.apply_mode(true);
+      let value = self.mem_read(self.stack_pointer as u32);
+      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
     pub fn _push_u16(&mut self, value: u16) {
-        println!("PUSH u16");
-        self._push((value >> 8) as u8);
-        self._push((value & 0x00FF) as u8);
+        println!("STACK PUSH (u16): {:04X} => {:04X}", self.stack_pointer, value);
+        let addr1 = self.stack_pointer;
+        let addr2 = self.wrapping_sub(addr1, 1);
+
+        self.mem_write(addr1 as u32, (value >> 8) as u8);
+        self.mem_write(addr2 as u32, (value & 0x00FF) as u8);
+
+        self.stack_pointer = self.wrapping_sub(self.stack_pointer, 2);
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
-        // FIXME wrappedで読まないといけない
-        println!("POPu16 SP: {:04X}", self.stack_pointer);
+        let addr1 = self.wrapping_add(self.stack_pointer, 1);
+        let addr2 = self.wrapping_add(addr1, 1);
 
-        let lo = self._pop();
-        let hi = self._pop();
-        ((hi as u16) << 8) | lo as u16
+        let lo = self.mem_read(addr1 as u32);
+        let hi = self.mem_read(addr2 as u32);
+
+        let value = ((hi as u16) << 8) | lo as u16;
+        println!("STACK POP (u16): {:04X} => {:04X}", self.stack_pointer, value);
+        self.stack_pointer = addr2;
+        value
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {
