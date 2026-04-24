@@ -56,8 +56,8 @@ BRK
 ✅ PLP
 ✅ PLX
 ✅ PLY
-REP
-ROL
+✅ REP
+✅ ROL
 ROR
 RTI
 RTL

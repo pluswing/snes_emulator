@@ -279,7 +279,7 @@ impl CPU {
             AddressingMode::Absolute_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されているアドレスを表します。
                 // Xレジスタを足すのかYレジスタを足すのかで$1234,xと$1234,yという表し方があります。
-                let base = self.wrapped_mem_read_u16(pc);
+                let base = self.mem_read_u16(pc);
                 // println!("BASE {:06X}", base);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
                 // println!("+DBR {:06X}", addr);
@@ -656,7 +656,18 @@ impl CPU {
         todo!("stz")
     }
     pub fn rep(&mut self, mode: &AddressingMode) {
-        todo!("rep")
+      let addr = self.get_operand_address(mode);
+      let value = self.mem_read(addr);
+
+      if self.is_native_mode() {
+        self.status = self.status & !value;
+      } else {
+        // = FLAG_BREAK, FLAG_BREAK2
+        let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
+        self.status = ((self.status & !value) & mask)
+          | (self.status & FLAG_MEMORY_ACCUMULATOR_MODE)
+          | (self.status & FLAG_INDEX_REGISTER_MODE);
+      }
     }
     pub fn pei(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
@@ -1469,28 +1480,27 @@ impl CPU {
     }
 
     pub fn rol(&mut self, mode: &AddressingMode) {
-      /*
-        let (value, carry) = if mode == &AddressingMode::Accumulator {
-            let (value, carry) = self.register_a.overflowing_mul(2);
-            self.register_a = value | (self.status & FLAG_CARRY);
-            (self.register_a, carry)
-        } else {
-            let addr = self.get_operand_address(mode);
-            let value = self.mem_read(addr);
-            let (value, carry) = value.overflowing_mul(2);
-            let value = value | (self.status & FLAG_CARRY);
-            self.mem_write(addr, value);
-            (value, carry)
-        };
+      let (value, carry) = if mode == &AddressingMode::Accumulator {
+        let a = self.get_register_a();
+        let (value, carry) = self.overflowing_mul(a, 2);
+        self.set_register_a(value | (self.status & FLAG_CARRY) as u16);
+        (self.get_register_a(), carry)
+      } else {
+          let addr = self.get_operand_address(mode);
+          let value = self.mem_read_auto(addr);
+          // println!("VALUE: {:04X}", value);
+          let (value, carry) = self.overflowing_mul(value, 2);
+          let value = value | (self.status & FLAG_CARRY) as u16;
+          self.mem_write_auto(addr, value);
+          (value, carry)
+      };
 
-        self.status = if carry {
-            self.status | FLAG_CARRY
-        } else {
-            self.status & !FLAG_CARRY
-        };
-        self.update_zero_and_negative_flags(value);
-      */
-      todo!("rol");
+      self.status = if carry {
+          self.status | FLAG_CARRY
+      } else {
+          self.status & !FLAG_CARRY
+      };
+      self.update_zero_and_negative_flags(value);
     }
 
     pub fn lsr(&mut self, mode: &AddressingMode) {
