@@ -58,8 +58,8 @@ BRK
 ✅ PLY
 ✅ REP
 ✅ ROL
-ROR
-RTI
+✅ ROR
+✅ RTI
 RTL
 RTS
 SBC

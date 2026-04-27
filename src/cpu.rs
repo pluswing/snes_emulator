@@ -1039,9 +1039,23 @@ impl CPU {
     }
 
     pub fn rti(&mut self, mode: &AddressingMode) {
-        // スタックからプロセッサ フラグをプルし、続いてプログラム カウンタをプルします。
-        self.status = self._pop() & !FLAG_BREAK | FLAG_BREAK2;
-        self.program_counter = self._pop_u16();
+      // スタックからプロセッサ フラグをプルし、続いてプログラム カウンタをプルします。
+      if self.is_native_mode() {
+        self.status = self._pop();
+        if !self.is_index_register_16bit_mode() {
+          self.register_x = self.register_x & 0x00FF;
+          self.register_y = self.register_y & 0x00FF;
+        }
+      } else {
+        let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
+          self.status = (self._pop() & mask)
+            | (self.status & FLAG_MEMORY_ACCUMULATOR_MODE)
+            | (self.status & FLAG_INDEX_REGISTER_MODE);
+      }
+      self.program_counter = self._pop_u16();
+      if self.is_native_mode() {
+        self.program_bank = self._pop();
+      }
     }
 
     pub fn plp(&mut self, mode: &AddressingMode) {
@@ -1158,7 +1172,7 @@ impl CPU {
       if self.is_native_mode() {
         lhs.wrapping_add(rhs)
       } else {
-        lhs.wrapping_add(rhs) as u16
+        (lhs.wrapping_add(rhs) & 0x00FF) as u16
       }
     }
 
@@ -1182,14 +1196,20 @@ impl CPU {
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
-        let addr1 = self.wrapping_add(self.stack_pointer, 1);
-        let addr2 = self.wrapping_add(addr1, 1);
+        let mut addr1 = self.wrapping_add(self.stack_pointer, 1);
+        if self.is_emulation_mode() {
+          addr1 = 0x0100 | (addr1 & 0x00FF)
+        }
+        let mut addr2 = self.wrapping_add(addr1, 1);
+        if self.is_emulation_mode() {
+          addr2 = 0x0100 | (addr2 & 0x00FF)
+        }
 
         let lo = self.mem_read(addr1 as u32);
         let hi = self.mem_read(addr2 as u32);
 
         let value = ((hi as u16) << 8) | lo as u16;
-        println!("STACK POP (u16): {:04X} => {:04X}", self.stack_pointer, value);
+        println!("STACK POP (u16): {:04X} => {:04X}", addr2, value);
         self.stack_pointer = addr2;
         value
     }
@@ -1453,30 +1473,30 @@ impl CPU {
     }
 
     pub fn ror(&mut self, mode: &AddressingMode) {
-      /*
+      let shift = if self.is_accumulator_16bit_mode() { 15 } else { 7 };
       let (value, carry) = if mode == &AddressingMode::Accumulator {
-            let carry = self.register_a & 0x01;
-            self.register_a = self.register_a / 2;
-            self.register_a = self.register_a | ((self.status & FLAG_CARRY) << 7);
-            (self.register_a, carry)
-        } else {
-            let addr = self.get_operand_address(mode);
-            let value = self.mem_read(addr);
-            let carry = value & 0x01;
-            let value = value / 2;
-            let value = value | ((self.status & FLAG_CARRY) << 7);
-            self.mem_write(addr, value);
-            (value, carry)
-        };
+        let a = self.get_register_a();
+        let carry = a & 0x01;
+        let a = a >> 1;
+        let a = a | ((self.status as u16 & FLAG_CARRY as u16) << shift);
+        self.set_register_a(a);
+        (a, carry)
+      } else {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read_auto(addr);
+        let carry = value & 0x01;
+        let value = value >> 1;
+        let value = value | ((self.status as u16 & FLAG_CARRY as u16) << shift);
+        self.mem_write_auto(addr, value);
+        (value, carry)
+      };
 
-        self.status = if carry == 1 {
-            self.status | FLAG_CARRY
-        } else {
-            self.status & !FLAG_CARRY
-        };
-        self.update_zero_and_negative_flags(value);
-      */
-      todo!("ror");
+      self.status = if carry != 0 {
+        self.status | FLAG_CARRY
+      } else {
+        self.status & !FLAG_CARRY
+      };
+      self.update_zero_and_negative_flags(value);
     }
 
     pub fn rol(&mut self, mode: &AddressingMode) {

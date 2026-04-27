@@ -128,7 +128,7 @@ fn main() {
       "3e.e",
       "3e.n",
     ];
-    let targets = testcase("ROL");
+    let targets = testcase("RTI");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
