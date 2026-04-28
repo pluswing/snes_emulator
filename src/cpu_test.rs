@@ -125,10 +125,10 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "54.e",
-      "3e.e",
-      "3e.n",
+      "6b.e",
+      // "6b.n",
     ];
-    let targets = testcase("RTI");
+    // let targets = testcase("RTL");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");

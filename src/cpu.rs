@@ -775,7 +775,10 @@ impl CPU {
         todo!("xce")
     }
     pub fn rtl(&mut self, mode: &AddressingMode) {
-        todo!("rtl")
+      // RTLはスタックから戻りアドレスを取得しますが、プログラムカウンタにロードする前に値を1つ増やします。
+      // 次に、呼び出し元のバンクがプログラムバンクレジスタに読み込まれます。つまり、RTLはJSLがスタックに対して行った操作を元に戻すのです。
+      self.program_counter = self._pop_u16() + 1;
+      self.program_bank = self._pop();
     }
     pub fn sep(&mut self, mode: &AddressingMode) {
         todo!("sep")
@@ -1196,20 +1199,25 @@ impl CPU {
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
-        let mut addr1 = self.wrapping_add(self.stack_pointer, 1);
-        if self.is_emulation_mode() {
-          addr1 = 0x0100 | (addr1 & 0x00FF)
-        }
-        let mut addr2 = self.wrapping_add(addr1, 1);
-        if self.is_emulation_mode() {
-          addr2 = 0x0100 | (addr2 & 0x00FF)
-        }
+        println!("SP(L): {:04X}", self.stack_pointer);
+
+        let addr1 = if self.is_emulation_mode() && self.stack_pointer != 0x1FF {
+          0x0100 | (self.wrapping_add(self.stack_pointer, 1) & 0x00FF)
+        } else {
+          self.stack_pointer + 1
+        };
+
+        let addr2 = if self.is_emulation_mode() && self.stack_pointer != 0x1FF {
+          0x0100 | (self.wrapping_add(addr1, 1) & 0x00FF)
+        } else {
+          addr1 + 1
+        };
 
         let lo = self.mem_read(addr1 as u32);
         let hi = self.mem_read(addr2 as u32);
 
         let value = ((hi as u16) << 8) | lo as u16;
-        println!("STACK POP (u16): {:04X} => {:04X}", addr2, value);
+        println!("STACK POP (u16): {:04X} => {:04X}", addr1, value);
         self.stack_pointer = addr2;
         value
     }
