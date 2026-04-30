@@ -60,8 +60,8 @@ BRK
 ✅ ROL
 ✅ ROR
 ✅ RTI
-RTL
-RTS
+✅ RTL
+✅ RTS
 SBC
 SEC
 SED

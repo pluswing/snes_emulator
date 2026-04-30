@@ -533,13 +533,20 @@ impl CPU {
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
           return
         }
-        // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
-        // StackはPEAのテストで必要だった。
-        if self.current_op.addressing_mode != AddressingMode::Absolute_Long &&
-          self.current_op.addressing_mode != AddressingMode::Stack {
 
-          self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
+        // たぶん、
+        // 新しい命令(6502にない命令)は、無視。
+        // 新しいアドレシングモード(LONG)も無視するっぽい。
+        if self.current_op.name == "RTL" {
           return
+        }
+        if self.current_op.name == "PEA" {
+          return
+        }
+
+        // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
+        if self.current_op.addressing_mode != AddressingMode::Absolute_Long {
+          self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
         }
       }
     }
@@ -777,7 +784,7 @@ impl CPU {
     pub fn rtl(&mut self, mode: &AddressingMode) {
       // RTLはスタックから戻りアドレスを取得しますが、プログラムカウンタにロードする前に値を1つ増やします。
       // 次に、呼び出し元のバンクがプログラムバンクレジスタに読み込まれます。つまり、RTLはJSLがスタックに対して行った操作を元に戻すのです。
-      self.program_counter = self._pop_u16() + 1;
+      self.program_counter = self._pop_u16().wrapping_add(1);
       self.program_bank = self._pop();
     }
     pub fn sep(&mut self, mode: &AddressingMode) {
@@ -1130,8 +1137,7 @@ impl CPU {
     }
 
     pub fn rts(&mut self, mode: &AddressingMode) {
-        let value = self._pop_u16() + 1;
-        self.program_counter = value;
+        self.program_counter = self._pop_u16().wrapping_add(1);
     }
 
     pub fn jsr(&mut self, mode: &AddressingMode) {
@@ -1160,66 +1166,27 @@ impl CPU {
       let addr = self.stack_pointer as u32;
       println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
-      self.stack_pointer = self.wrapping_sub(self.stack_pointer, 1);
-    }
-
-    fn wrapping_sub(&mut self, lhs: u16, rhs: u16) -> u16 {
-      if self.is_native_mode() {
-        lhs.wrapping_sub(rhs)
-      } else {
-        lhs.wrapping_sub(rhs) as u16
-      }
-    }
-
-    fn wrapping_add(&mut self, lhs: u16, rhs: u16) -> u16 {
-      if self.is_native_mode() {
-        lhs.wrapping_add(rhs)
-      } else {
-        (lhs.wrapping_add(rhs) & 0x00FF) as u16
-      }
+      self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+      self.apply_mode(false);
     }
 
     pub fn _pop(&mut self) -> u8 {
-      self.stack_pointer = self.wrapping_add(self.stack_pointer, 1);
-      self.apply_mode(true);
+      self.stack_pointer = self.stack_pointer.wrapping_add(1);
+      self.apply_mode(false);
       let value = self.mem_read(self.stack_pointer as u32);
       println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
     pub fn _push_u16(&mut self, value: u16) {
-        println!("STACK PUSH (u16): {:04X} => {:04X}", self.stack_pointer, value);
-        let addr1 = self.stack_pointer;
-        let addr2 = self.wrapping_sub(addr1, 1);
-
-        self.mem_write(addr1 as u32, (value >> 8) as u8);
-        self.mem_write(addr2 as u32, (value & 0x00FF) as u8);
-
-        self.stack_pointer = self.wrapping_sub(self.stack_pointer, 2);
+        self._push((value >> 8) as u8);
+        self._push((value & 0x00FF) as u8);
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
-        println!("SP(L): {:04X}", self.stack_pointer);
-
-        let addr1 = if self.is_emulation_mode() && self.stack_pointer != 0x1FF {
-          0x0100 | (self.wrapping_add(self.stack_pointer, 1) & 0x00FF)
-        } else {
-          self.stack_pointer + 1
-        };
-
-        let addr2 = if self.is_emulation_mode() && self.stack_pointer != 0x1FF {
-          0x0100 | (self.wrapping_add(addr1, 1) & 0x00FF)
-        } else {
-          addr1 + 1
-        };
-
-        let lo = self.mem_read(addr1 as u32);
-        let hi = self.mem_read(addr2 as u32);
-
-        let value = ((hi as u16) << 8) | lo as u16;
-        println!("STACK POP (u16): {:04X} => {:04X}", addr1, value);
-        self.stack_pointer = addr2;
-        value
+        let lo = self._pop();
+        let hi = self._pop();
+        ((hi as u16) << 8) | lo as u16
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {
