@@ -272,7 +272,11 @@ impl CPU {
             }
             AddressingMode::Absolute_Long => {
               // アドレス部の内容が目的のデータが格納されている24bitフルアドレスを表します。$123456のように表します。
-              let addr = self.wrapped_mem_read_u16(pc);
+              let addr = if self.is_native_mode() {
+                self.wrapped_mem_read_u16(pc)
+              } else {
+                self.mem_read_u16(pc)
+              };
               let bank = self.mem_read(pc & 0xFF0000 | (pc + 2) & 0x00FFFF);
               (bank as u32) << 16 | addr as u32
             }
@@ -447,10 +451,10 @@ impl CPU {
               let value = self.mem_read(pc) as u32;
               let addr = (self.stack_pointer as u32).wrapping_add(value);
               let addr = addr & 0x00FFFF;
-              let addr = self.mem_read_u16(addr) as u32;
+              let addr = self.wrapped_mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               let addr = ((self.data_bank as u32) << 16).wrapping_add(addr);
-              // println!("ADDR: {:06X}", addr);
+              println!("ADDR: {:06X}", addr);
               addr & 0xFFFFFF
             }
             AddressingMode::NoneAddressing => {
@@ -788,7 +792,10 @@ impl CPU {
       self.program_bank = self._pop();
     }
     pub fn sep(&mut self, mode: &AddressingMode) {
-        todo!("sep")
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.status = self.status | value;
+        self.clear_index_register_upper_byte();
     }
     pub fn tsb(&mut self, mode: &AddressingMode) {
         todo!("tsb")
@@ -1041,21 +1048,24 @@ impl CPU {
     }
 
     pub fn sta(&mut self, mode: &AddressingMode) {
-      /*
-        let addr = self.get_operand_address(mode);
-        self.mem_write(addr, self.register_a);
-      */
-      todo!("sta");
+      let addr = self.get_operand_address(mode);
+      let a = self.get_register_a();
+      self.mem_write_auto(addr, a);
+    }
+
+    fn clear_index_register_upper_byte(&mut self) {
+      if self.is_index_register_16bit_mode() {
+        return;
+      }
+      self.register_x = self.register_x & 0x00FF;
+      self.register_y = self.register_y & 0x00FF;
     }
 
     pub fn rti(&mut self, mode: &AddressingMode) {
       // スタックからプロセッサ フラグをプルし、続いてプログラム カウンタをプルします。
       if self.is_native_mode() {
         self.status = self._pop();
-        if !self.is_index_register_16bit_mode() {
-          self.register_x = self.register_x & 0x00FF;
-          self.register_y = self.register_y & 0x00FF;
-        }
+        self.clear_index_register_upper_byte();
       } else {
         let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
           self.status = (self._pop() & mask)
@@ -1071,10 +1081,7 @@ impl CPU {
     pub fn plp(&mut self, mode: &AddressingMode) {
         if self.is_native_mode() {
           self.status = self._pop();
-          if !self.is_index_register_16bit_mode() {
-            self.register_x = self.register_x & 0x00FF;
-            self.register_y = self.register_y & 0x00FF;
-          }
+          self.clear_index_register_upper_byte();
         } else {
           // = FLAG_BREAK, FLAG_BREAK2
           let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
@@ -1673,17 +1680,17 @@ impl CPU {
           let mut overflow = false;
           for i in if self.is_accumulator_16bit_mode() { vec![0, 1, 2, 3] } else { vec![0, 1] } {
             let mut sum = (value_l & 0x000F) + (value_r & 0x000F) + carry;
-            overflow = false;
             carry = 0;
             if sum > 9 {
               sum += 6;
-              overflow = sum >= 0x000F;
+              // overflow = sum >= 0x000F;
               sum &= 0x000F;
               carry = 1;
             }
             result = result | sum << (i * 4);
             value_l >>= 4;
             value_r >>= 4;
+            overflow = (sum as i16) < -8 || (sum as i16) > 7;
           }
           println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
 
