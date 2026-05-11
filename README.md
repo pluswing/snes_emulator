@@ -69,9 +69,9 @@ TODO SBC
 ✅ SEP
 ✅ STA
 STP
-STX
-STY
-STZ
+✅ STX
+✅ STY
+✅ STZ
 ✅ TAX
 TAY
 TCD

@@ -663,9 +663,12 @@ impl CPU {
 
       self.data_bank = dest_bank as u8;
     }
+
     pub fn stz(&mut self, mode: &AddressingMode) {
-        todo!("stz")
+      let addr = self.get_operand_address(mode);
+      self.mem_write_auto(addr, 0);
     }
+
     pub fn rep(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let value = self.mem_read(addr);
@@ -1032,19 +1035,23 @@ impl CPU {
     }
 
     pub fn sty(&mut self, mode: &AddressingMode) {
-      /*
       let addr = self.get_operand_address(mode);
-        self.mem_write(addr, self.register_y);
-      */
-      todo!("sty");
+      let y = self.get_register_y();
+      if self.is_native_mode() {
+        self.mem_write_u16(addr, y);
+      } else {
+        self.mem_write(addr, y as u8);
+      }
     }
 
     pub fn stx(&mut self, mode: &AddressingMode) {
-      /*
-        let addr = self.get_operand_address(mode);
-        self.mem_write(addr, self.register_x);
-      */
-      todo!("stx");
+      let addr = self.get_operand_address(mode);
+      let x = self.get_register_x();
+      if self.is_native_mode() {
+        self.mem_write_u16(addr, x);
+      } else {
+        self.mem_write(addr, x as u8);
+      }
     }
 
     pub fn sta(&mut self, mode: &AddressingMode) {
