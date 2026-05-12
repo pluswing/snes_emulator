@@ -68,15 +68,15 @@ TODO SBC
 ✅ SEI
 ✅ SEP
 ✅ STA
-STP
+✅ STP
 ✅ STX
 ✅ STY
 ✅ STZ
 ✅ TAX
-TAY
-TCD
-TCS
-TDC
+✅ TAY
+✅ TCD
+✅ TCS
+✅ TDC
 TRB
 TSB
 TSC

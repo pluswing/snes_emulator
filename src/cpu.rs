@@ -738,16 +738,19 @@ impl CPU {
         self._branch(mode, 0x00, false);
     }
     pub fn tdc(&mut self, mode: &AddressingMode) {
-        todo!("tdc")
+        self.register_a = self.direct_page;
+        self._update_zero_and_negative_flags(self.register_a, true);
     }
     pub fn phk(&mut self, mode: &AddressingMode) {
         self._push(self.program_bank);
     }
     pub fn tcd(&mut self, mode: &AddressingMode) {
-        todo!("tcd")
+        self.direct_page = self.register_a;
+        self._update_zero_and_negative_flags(self.register_a, true);
     }
     pub fn stp(&mut self, mode: &AddressingMode) {
-        todo!("stp")
+      // 何もしなくて良さそう。
+      // TODO 次の命令が実行されなくする必要があるかも。
     }
     pub fn mvn(&mut self, mode: &AddressingMode) {
       // 連続したメモリブロックをコピーする
@@ -808,7 +811,11 @@ impl CPU {
       self._update_zero_and_negative_flags(self.direct_page, true);
     }
     pub fn tcs(&mut self, mode: &AddressingMode) {
-        todo!("tcs")
+        self.stack_pointer = if self.is_native_mode() {
+          self.register_a
+        } else {
+          self.register_a & 0x00FF
+        };
     }
     pub fn xba(&mut self, mode: &AddressingMode) {
         todo!("xba")
@@ -834,7 +841,16 @@ impl CPU {
         todo!("txy")
     }
     pub fn trb(&mut self, mode: &AddressingMode) {
-        todo!("trb")
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read_auto(addr);
+        let a = self.get_register_a();
+        println!("A: {:04X}, M: {:04X}", a, data);
+        let result = data & a;
+        if result == 0 {
+          self.status = self.status | FLAG_ZERO;
+        } else {
+          self.status = self.status & (!FLAG_ZERO);
+        }
     }
     pub fn plb(&mut self, mode: &AddressingMode) {
       self.data_bank = self._pop();
@@ -1013,8 +1029,9 @@ impl CPU {
     }
 
     pub fn tay(&mut self, mode: &AddressingMode) {
-        self.register_y = self.register_a;
-        self.update_zero_and_negative_flags(self.register_y);
+        self.set_register_y(self.register_a);
+        let y = self.get_register_y();
+        self.update_zero_and_negative_flags_xy(y);
     }
 
     pub fn txa(&mut self, mode: &AddressingMode) {
