@@ -263,11 +263,7 @@ impl CPU {
             }
             AddressingMode::Absolute => {
               // アドレス部の内容が目的のデータが格納されている16bitアドレスを表します。$1234のように表します。
-              let addr = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
-                self.mem_read_u16(pc) as u32
-              } else {
-                self.wrapped_mem_read_u16(pc) as u32
-              };
+              let addr = self.wrapped_mem_read_u16(pc) as u32;
               ((self.data_bank as u32) << 16) | addr
             }
             AddressingMode::Absolute_Long => {
@@ -473,7 +469,7 @@ impl CPU {
     }
 
     pub fn wrapped_mem_read_u16(&mut self, pos: u32) -> u16 {
-        if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
+      if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() && self.current_op.name != "TSB" {
           let lo = self.mem_read(pos) as u16;
           let hi = self.mem_read((pos & 0xFFFF00) | ((pos + 1) & 0x0000FF))  as u16;
           (hi << 8) | (lo as u16)
@@ -803,9 +799,23 @@ impl CPU {
         self.status = self.status | value;
         self.clear_index_register_upper_byte();
     }
+
     pub fn tsb(&mut self, mode: &AddressingMode) {
-        todo!("tsb")
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read_auto(addr);
+        let a = self.get_register_a();
+        let result = data | a;
+        self.mem_write_auto(addr, result);
+
+        let result = data & a;
+        // println!("A: {:04X}, M: {:04X}, R: {:04X}", a, data, result);
+        if result == 0 {
+          self.status = self.status | FLAG_ZERO;
+        } else {
+          self.status = self.status & (!FLAG_ZERO);
+        }
     }
+
     pub fn pld(&mut self, mode: &AddressingMode) {
       self.direct_page = self._pop_u16();
       self._update_zero_and_negative_flags(self.direct_page, true);
@@ -824,10 +834,13 @@ impl CPU {
         self._push_u16(self.direct_page);
     }
     pub fn tsc(&mut self, mode: &AddressingMode) {
-        todo!("tsc")
+        self.register_a = self.stack_pointer;
+        self.update_zero_and_negative_flags(self.register_a);
     }
     pub fn tyx(&mut self, mode: &AddressingMode) {
-        todo!("tyx")
+        let y = self.get_register_y();
+        self.set_register_x(y);
+        self.update_zero_and_negative_flags_xy(y);
     }
     pub fn pea(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
@@ -838,13 +851,17 @@ impl CPU {
         todo!("wai")
     }
     pub fn txy(&mut self, mode: &AddressingMode) {
-        todo!("txy")
+        let x = self.get_register_x();
+        self.set_register_y(x);
+        self.update_zero_and_negative_flags_xy(x);
     }
     pub fn trb(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let data = self.mem_read_auto(addr);
         let a = self.get_register_a();
-        println!("A: {:04X}, M: {:04X}", a, data);
+        let result = data & !a;
+        self.mem_write_auto(addr, result);
+
         let result = data & a;
         if result == 0 {
           self.status = self.status | FLAG_ZERO;
@@ -1015,17 +1032,19 @@ impl CPU {
     }
 
     pub fn txs(&mut self, mode: &AddressingMode) {
-        self.stack_pointer = self.register_x;
+        self.stack_pointer = self.get_register_x();
     }
 
     pub fn tsx(&mut self, mode: &AddressingMode) {
-        self.register_x = self.stack_pointer;
-        self.update_zero_and_negative_flags(self.register_x);
+        self.set_register_x(self.stack_pointer);
+        let x = self.get_register_x();
+        self.update_zero_and_negative_flags_xy(x);
     }
 
     pub fn tya(&mut self, mode: &AddressingMode) {
-        self.register_a = self.register_y;
-        self.update_zero_and_negative_flags(self.register_a);
+        self.set_register_a(self.register_y);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
     }
 
     pub fn tay(&mut self, mode: &AddressingMode) {
@@ -1035,8 +1054,9 @@ impl CPU {
     }
 
     pub fn txa(&mut self, mode: &AddressingMode) {
-        self.register_a = self.register_x;
-        self.update_zero_and_negative_flags(self.register_a);
+        self.set_register_a(self.register_x);
+        let a = self.get_register_a();
+        self.update_zero_and_negative_flags(a);
     }
 
     pub fn tax(&mut self, mode: &AddressingMode) {

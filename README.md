@@ -77,15 +77,15 @@ TODO SBC
 ✅ TCD
 ✅ TCS
 ✅ TDC
-TRB
-TSB
-TSC
-TSX
-TXA
-TXS
-TXY
-TYA
-TYX
+✅ TRB
+✅ TSB
+✅ TSC
+✅ TSX
+✅ TXA
+✅ TXS
+✅ TXY
+✅ TYA
+✅ TYX
 WAI
 WDM
 XBA
