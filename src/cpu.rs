@@ -385,7 +385,8 @@ impl CPU {
                 addr.wrapping_add(self.get_register_x() as u32)
               };
               let addr = addr & 0x00FFFF;
-              let addr = self.wrapped_mem_read_u16(addr) as u32;
+              let addr = self.force_wrapped_mem_read_u16(addr) as u32;
+              println!("ADDR: {:04X}", addr);
               (self.data_bank as u32) << 16 | addr
             }
             // LDA (dp), Y => B1 dp
@@ -447,7 +448,7 @@ impl CPU {
               let value = self.mem_read(pc) as u32;
               let addr = (self.stack_pointer as u32).wrapping_add(value);
               let addr = addr & 0x00FFFF;
-              let addr = self.wrapped_mem_read_u16(addr) as u32;
+              let addr = self.force_wrapped_mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               let addr = ((self.data_bank as u32) << 16).wrapping_add(addr);
               println!("ADDR: {:06X}", addr);
@@ -474,10 +475,14 @@ impl CPU {
           let hi = self.mem_read((pos & 0xFFFF00) | ((pos + 1) & 0x0000FF))  as u16;
           (hi << 8) | (lo as u16)
         } else {
-          let lo = self.mem_read(pos) as u16;
-          let hi = self.mem_read((pos & 0xFF0000) | ((pos + 1) & 0x00FFFF))  as u16;
-          (hi << 8) | (lo as u16)
+          self.force_wrapped_mem_read_u16(pos)
         }
+    }
+
+    fn force_wrapped_mem_read_u16(&mut self, pos: u32) -> u16 {
+      let lo = self.mem_read(pos) as u16;
+      let hi = self.mem_read((pos & 0xFF0000) | ((pos + 1) & 0x00FFFF))  as u16;
+      (hi << 8) | (lo as u16)
     }
 
     pub fn mem_write_u16(&mut self, pos: u32, data: u16) {
@@ -1631,37 +1636,51 @@ impl CPU {
     }
 
     pub fn sbc(&mut self, mode: &AddressingMode) {
-      /*
-        // A-M-(1-C)
-        // キャリーかどうかの判定が逆
-        // キャリーの引き算(1-C)
-        // overflowの判定が逆 = m,p, p,m
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+      // A-M-(1-C)
+      let decimal_mode = (self.status & FLAG_DECIMAL) != 0;
+      let addr = self.get_operand_address(mode);
+      let value = self.mem_read_u16(addr);
+      let a: u16 = self.get_register_a();
+      let mut carry = (self.status & FLAG_CARRY) as u16;
 
-        let carry = self.status & FLAG_CARRY;
-        let (v1, carry_flag1) = self.register_a.overflowing_sub(value);
-        let (n, carry_flag2) = v1.overflowing_sub(1 - carry);
+      let mut result: u16 = 0;
+      let mut value_l = a;
+      let mut value_r = value;
+      let mut overflow = false;
+      for i in if self.is_accumulator_16bit_mode() { vec![0, 1, 2, 3] } else { vec![0, 1] } {
+        let l = (value_l & 0x000F) as i16;
+        let r = (value_r & 0x000F) as i16;
+        let mut sum: i16 = l - r - (1 - carry as i16);
+        carry = 1;
+        overflow = sum < -8 || sum > 7;
+        if sum < 0 {
+          if decimal_mode {
+            sum -= 6;
+          }
+          sum &= 0x000F;
+          carry = 0;
+        }
+        result = result | (sum as u16) << (i * 4);
+        value_l >>= 4;
+        value_r >>= 4;
+      }
+      println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
 
-        let overflow = (self.register_a & SIGN_BIT) != (value & SIGN_BIT)
-            && (self.register_a & SIGN_BIT) != (n & SIGN_BIT);
+      self.set_register_a(result);
+      let a = self.get_register_a();
 
-        self.register_a = n;
+      self.status = if carry != 0 {
+          self.status | FLAG_CARRY
+      } else {
+          self.status & !FLAG_CARRY
+      };
+      self.status = if overflow {
+          self.status | FLAG_OVERFLOW
+      } else {
+          self.status & !FLAG_OVERFLOW
+      };
 
-        self.status = if !carry_flag1 && !carry_flag2 {
-            self.status | FLAG_CARRY
-        } else {
-            self.status & !FLAG_CARRY
-        };
-        self.status = if overflow {
-            self.status | FLAG_OVERFLOW
-        } else {
-            self.status & !FLAG_OVERFLOW
-        };
-
-        self.update_zero_and_negative_flags(self.register_a)
-      */
-      todo!("sbc");
+      self.update_zero_and_negative_flags(a);
     }
 
     fn overflowing_add(&self, lhs: u16, rhs: u16) -> (u16, bool) {
@@ -1681,111 +1700,49 @@ impl CPU {
       }
     }
 
-/*
-    fn _bcd2(&self, value: u16) -> u16 {
-      if (self.status & FLAG_DECIMAL) == 0 {
-        return value;
-      }
-      let n1 = ((value & 0x000F) >> 0) * 1;
-      let n2 = ((value & 0x00F0) >> 4) * 10;
-      let n3 = ((value & 0x0F00) >> 8) * 100;
-      println!(" n1: {} n2: {} n3: {}", n1, n2, n3);
-      let mut d = n1 + n2 + n3;
-      d
-    }
-
-    fn _bcd3(&self, value: u16) -> u16 {
-      if (self.status & FLAG_DECIMAL) == 0 {
-        return value;
-      }
-      let mut d = value;
-      let mut ret: u16 = 0;
-      let mut shift = 0;
-      while d > 0 {
-        let m = d % 10;
-        d = d / 10;
-        ret += m << shift;
-        shift += 4;
-      }
-      ret
-    }
- */
     pub fn adc(&mut self, mode: &AddressingMode) {
-        if (self.status & FLAG_DECIMAL) != 0 {
-          // デシマルモード
-          let addr = self.get_operand_address(mode);
-          let value = self.mem_read_u16(addr);
-          let a: u16 = self.get_register_a();
-          let mut carry = (self.status & FLAG_CARRY) as u16;
+      let decimal_mode = (self.status & FLAG_DECIMAL) != 0;
+      let addr = self.get_operand_address(mode);
+      let value = self.mem_read_u16(addr);
+      let a: u16 = self.get_register_a();
+      let mut carry = (self.status & FLAG_CARRY) as u16;
 
-          let mut result: u16 = 0;
-          let mut value_l = value;
-          let mut value_r = a;
-          let mut overflow = false;
-          for i in if self.is_accumulator_16bit_mode() { vec![0, 1, 2, 3] } else { vec![0, 1] } {
-            let mut sum = (value_l & 0x000F) + (value_r & 0x000F) + carry;
-            carry = 0;
-            if sum > 9 {
-              sum += 6;
-              // overflow = sum >= 0x000F;
-              sum &= 0x000F;
-              carry = 1;
-            }
-            result = result | sum << (i * 4);
-            value_l >>= 4;
-            value_r >>= 4;
-            overflow = (sum as i16) < -8 || (sum as i16) > 7;
+      let mut result: u16 = 0;
+      let mut value_l = value;
+      let mut value_r = a;
+      let mut overflow = false;
+      for i in if self.is_accumulator_16bit_mode() { vec![0, 1, 2, 3] } else { vec![0, 1] } {
+        let mut sum = (value_l & 0x000F) + (value_r & 0x000F) + carry;
+        carry = 0;
+        overflow = (sum as i16) < -8 || (sum as i16) > 7;
+        if sum > if decimal_mode { 0x09 } else { 0x0F } {
+          if decimal_mode {
+            sum += 6;
           }
-          println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
-
-          // let overflow = self.sign_bit(a) == self.sign_bit(value)
-          //   && self.sign_bit(value) != self.sign_bit(result);
-
-          self.set_register_a(result);
-          let a = self.get_register_a();
-
-          self.status = if carry != 0 {
-              self.status | FLAG_CARRY
-          } else {
-              self.status & !FLAG_CARRY
-          };
-          self.status = if overflow {
-              self.status | FLAG_OVERFLOW
-          } else {
-              self.status & !FLAG_OVERFLOW
-          };
-
-          self.update_zero_and_negative_flags(a);
-
-          return;
+          sum &= 0x000F;
+          carry = 1;
         }
-        // 通常時
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read_u16(addr);
+        result = result | sum << (i * 4);
+        value_l >>= 4;
+        value_r >>= 4;
+      }
+      println!("A: {:06X}, V: {:06X}, R: {:06X}", a, value, result);
 
-        let carry = (self.status & FLAG_CARRY) as u16;
-        let (rhs, carry_flag1) = self.overflowing_add(value, carry);
-        let a = self.get_register_a();
+      self.set_register_a(result);
+      let a = self.get_register_a();
 
-        let (n, carry_flag2) = self.overflowing_add(a, rhs);
-        let overflow = self.sign_bit(a) == self.sign_bit(value)
-            && self.sign_bit(value) != self.sign_bit(n);
+      self.status = if carry != 0 {
+          self.status | FLAG_CARRY
+      } else {
+          self.status & !FLAG_CARRY
+      };
+      self.status = if overflow {
+          self.status | FLAG_OVERFLOW
+      } else {
+          self.status & !FLAG_OVERFLOW
+      };
 
-        self.set_register_a(n);
-        let a = self.get_register_a();
-
-        self.status = if carry_flag1 || carry_flag2 {
-            self.status | FLAG_CARRY
-        } else {
-            self.status & !FLAG_CARRY
-        };
-        self.status = if overflow {
-            self.status | FLAG_OVERFLOW
-        } else {
-            self.status & !FLAG_OVERFLOW
-        };
-
-        self.update_zero_and_negative_flags(a)
+      self.update_zero_and_negative_flags(a);
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u16) {
