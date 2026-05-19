@@ -1,6 +1,6 @@
 # snes_emulator
 
-TODO ADC
+✅ ADC
 ✅ AND
 ✅ ASL
 ✅ BCC
@@ -62,7 +62,7 @@ BRK
 ✅ RTI
 ✅ RTL
 ✅ RTS
-TODO SBC
+✅ SBC
 ✅ SEC
 ✅ SED
 ✅ SEI
