@@ -86,7 +86,7 @@ BRK
 ✅ TXY
 ✅ TYA
 ✅ TYX
-WAI
-WDM
-XBA
+✅ WAI -> 割り込みができてから本実装
+✅ WDM
+✅ XBA
 XCE

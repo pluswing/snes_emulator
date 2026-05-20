@@ -708,7 +708,7 @@ impl CPU {
       }
     }
     pub fn wdm(&mut self, mode: &AddressingMode) {
-        todo!("wdm")
+      // NOPと同じ。
     }
     pub fn cop(&mut self, mode: &AddressingMode) {
       // FIXME
@@ -789,7 +789,19 @@ impl CPU {
       self.data_bank = dest_bank as u8;
     }
     pub fn xce(&mut self, mode: &AddressingMode) {
-        todo!("xce")
+        let carry = self.status & FLAG_CARRY;
+        let emulation = self.mode;
+        self.status = (self.status & !FLAG_CARRY) | (emulation & 0x01);
+        self.mode = carry;
+        if !self.is_index_register_16bit_mode() {
+          self.register_x = self.register_x & 0x00FF;
+          self.register_y = self.register_y & 0x00FF;
+        }
+        if emulation == MODE_16BIT && carry == MODE_8BIT {
+          // エミュレーションモードに切り替え
+          self.status = (self.status & !FLAG_BREAK);
+          self.status = (self.status & !FLAG_BREAK2);
+        }
     }
     pub fn rtl(&mut self, mode: &AddressingMode) {
       // RTLはスタックから戻りアドレスを取得しますが、プログラムカウンタにロードする前に値を1つ増やします。
@@ -832,7 +844,9 @@ impl CPU {
         };
     }
     pub fn xba(&mut self, mode: &AddressingMode) {
-        todo!("xba")
+        let a = self.register_a;
+        self.register_a = ((a & 0xFF00) >> 8) | ((a & 0x00FF) << 8);
+        self._update_zero_and_negative_flags((a & 0xFF00) >> 8, false);
     }
     pub fn phd(&mut self, mode: &AddressingMode) {
         self._push_u16(self.direct_page);
@@ -852,7 +866,7 @@ impl CPU {
         self._push_u16(value as u16);
     }
     pub fn wai(&mut self, mode: &AddressingMode) {
-        todo!("wai")
+      // TODO 割り込みを受信するまで待機する
     }
     pub fn txy(&mut self, mode: &AddressingMode) {
         let x = self.get_register_x();

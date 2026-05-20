@@ -128,7 +128,7 @@ fn main() {
       "86.e",
       "86.n",
     ];
-    let targets = testcase("SBC");
+    let targets = testcase("XCE");
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
