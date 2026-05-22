@@ -128,7 +128,8 @@ fn main() {
       "86.e",
       "86.n",
     ];
-    let targets = testcase("XCE");
+    let targets = testcase("BRK");
+    let targets = testcases();
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -190,6 +191,20 @@ fn main() {
     }
 
     println!("OK!");
+}
+
+fn testcases() -> Vec<String> {
+  let mut ret: Vec<String> = vec![];
+  for (key, value) in CPU_OPS_CODES.iter() {
+    if value.name == "MVN" || value.name == "MVP" {
+      continue;
+    }
+    let e = format!("{:02X}.e", value.code);
+    ret.push(e);
+    let n = format!("{:02X}.n", value.code);
+    ret.push(n);
+  }
+  return ret
 }
 
 fn testcase(op: &str) -> Vec<String> {

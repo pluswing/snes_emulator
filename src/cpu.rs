@@ -799,8 +799,7 @@ impl CPU {
         }
         if emulation == MODE_16BIT && carry == MODE_8BIT {
           // エミュレーションモードに切り替え
-          self.status = (self.status & !FLAG_BREAK);
-          self.status = (self.status & !FLAG_BREAK2);
+          self.status = self.status | FLAG_BREAK | FLAG_BREAK2;
         }
     }
     pub fn rtl(&mut self, mode: &AddressingMode) {
@@ -1452,21 +1451,42 @@ impl CPU {
     }
 
     pub fn brk(&mut self, mode: &AddressingMode) {
+        if self.is_native_mode() {
+          // 1. プログラムバンクレジスタをスタックにプッシュします。
+          self._push(self.program_bank);
 
-        // ネイティブモードでは、プログラムバンクレジスタがスタックにプッシュされます。次に、プログラムカウンタが2インクリメントされ、スタックにプッシュされます。次に、ステータスレジスタ（エミュレーションモードの場合はブレークフラグがセットされた状態）がスタックにプッシュされます。次に、割り込み無効フラグがセットされます。ネイティブモードでは、プログラムバンクレジスタがクリアされます。
+          // 2. プログラムカウンタを2インクリメントし、スタックにプッシュします。
+          self._push_u16(self.program_counter.wrapping_add(1));
 
-        // FLAG_BREAK が立っている場合は
-        if self.status & FLAG_BREAK != 0 {
-            return;
+          // 3. ステータスレジスタをスタックにプッシュします。
+          self._push(self.status);
+
+          // 4. 割込禁止フラグをセットし、デシマルモードフラグをクリアします。
+          self.sei(mode);
+          self.status = self.status & (!FLAG_DECIMAL);
+
+          // 5. プログラムバンクレジスタをゼロクリアし、プログラムカウンタをBreakベクタ($FFE6)より取得し、割込処理を実行します。
+          self.program_bank = 0x00;
+          self.program_counter = self.mem_read_u16(0xFFE6);
+
+        } else {
+          // // 1. プログラムカウンタを2インクリメントし、スタックにプッシュします。
+          self._push_u16(self.program_counter.wrapping_add(1));
+
+          // 2. ステータスレジスタをスタックにプッシュします。
+          self._push(self.status);
+
+          // 3. ブレークモードフラグをセットし、SEIを実行してIRQ割込を禁止します
+          self.status = self.status | FLAG_BREAK;
+          self.sei(mode);
+
+          // 4. プログラムバンクレジスタをゼロクリアし、プログラムカウンタをIRQ/BRKベクタ($FFFE)より取得し、割込処理を実行します。
+          self.program_bank = 0x00;
+          self.program_counter = self.mem_read_u16(0xFFFE);
+
+          // 5. デシマルフラグをクリアします
+          self.status = self.status & (!FLAG_DECIMAL)
         }
-
-        // プログラム カウンターとプロセッサ ステータスがスタックにプッシュされ、
-        self._push_u16(self.program_counter + 1);
-        self._push(self.status);
-
-        // $FFFE/F の IRQ 割り込みベクトルが PC にロードされ、ステータスのブレーク フラグが 1 に設定されます。
-        self.program_counter = self.mem_read_u16(0xFFFE);
-        self.status = self.status | FLAG_BREAK;
     }
 
     pub fn bpl(&mut self, mode: &AddressingMode) {

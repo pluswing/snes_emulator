@@ -11,7 +11,7 @@
 ✅ BNE
 ✅ BPL
 ✅ BRA
-BRK
+✅ BRK
 ✅ BRL
 ✅ BVC
 ✅ BVS
@@ -89,4 +89,4 @@ BRK
 ✅ WAI -> 割り込みができてから本実装
 ✅ WDM
 ✅ XBA
-XCE
+✅ XCE
