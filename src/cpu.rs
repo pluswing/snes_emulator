@@ -263,7 +263,7 @@ impl CPU {
             }
             AddressingMode::Absolute => {
               // アドレス部の内容が目的のデータが格納されている16bitアドレスを表します。$1234のように表します。
-              let addr = self.wrapped_mem_read_u16(pc) as u32;
+              let addr = self.force_wrapped_mem_read_u16(pc) as u32;
               ((self.data_bank as u32) << 16) | addr
             }
             AddressingMode::Absolute_Long => {
@@ -469,7 +469,7 @@ impl CPU {
     }
 
     pub fn wrapped_mem_read_u16(&mut self, pos: u32) -> u16 {
-      if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() && self.current_op.name != "TSB" {
+      if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() && self.current_op.name != "TSB" && self.current_op.name != "STY" {
           let lo = self.mem_read(pos) as u16;
           let hi = self.mem_read((pos & 0xFFFF00) | ((pos + 1) & 0x0000FF))  as u16;
           (hi << 8) | (lo as u16)
@@ -534,7 +534,9 @@ impl CPU {
     fn apply_mode(&mut self, force: bool) {
       if self.is_emulation_mode() {
         if force {
+          print!("SP: {:04X}", self.stack_pointer);
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
+          println!(" => {:04X} (emu force)", self.stack_pointer);
           return
         }
 
@@ -550,7 +552,9 @@ impl CPU {
 
         // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
         if self.current_op.addressing_mode != AddressingMode::Absolute_Long {
+          print!("SP: {:04X}", self.stack_pointer);
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
+          println!(" => {:04X} (Absolute_Long)", self.stack_pointer);
         }
       }
     }
@@ -832,7 +836,7 @@ impl CPU {
     }
 
     pub fn pld(&mut self, mode: &AddressingMode) {
-      self.direct_page = self._pop_u16();
+      self.direct_page = self._no_wrapped_pop_u16();
       self._update_zero_and_negative_flags(self.direct_page, true);
     }
     pub fn tcs(&mut self, mode: &AddressingMode) {
@@ -1146,7 +1150,7 @@ impl CPU {
         } else {
           // = FLAG_BREAK, FLAG_BREAK2
           let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
-          self.status = (self._pop() & mask)
+          self.status = (self._force_wrapped_pop() & mask)
             | (self.status & FLAG_MEMORY_ACCUMULATOR_MODE)
             | (self.status & FLAG_INDEX_REGISTER_MODE);
         }
@@ -1240,7 +1244,6 @@ impl CPU {
 
     pub fn _pop(&mut self) -> u8 {
       self.stack_pointer = self.stack_pointer.wrapping_add(1);
-      self.apply_mode(false);
       let value = self.mem_read(self.stack_pointer as u32);
       println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
@@ -1253,8 +1256,23 @@ impl CPU {
 
     pub fn _pop_u16(&mut self) -> u16 {
         let lo = self._pop();
+        self.apply_mode(false);
         let hi = self._pop();
         ((hi as u16) << 8) | lo as u16
+    }
+
+    pub fn _no_wrapped_pop_u16(&mut self) -> u16 {
+        let lo = self._pop();
+        let hi = self._pop();
+        ((hi as u16) << 8) | lo as u16
+    }
+
+    pub fn _force_wrapped_pop(&mut self) -> u8 {
+      self.stack_pointer = self.stack_pointer.wrapping_add(1);
+      self.apply_mode(true);
+      let value = self.mem_read(self.stack_pointer as u32);
+      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
+      value
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {

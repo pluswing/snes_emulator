@@ -3,7 +3,7 @@ use std::fs;
 use std::io::prelude::*;
 use std::fmt;
 
-use crate::cpu::CPU;
+use crate::cpu::{AddressingMode, CPU};
 use crate::opscodes::CPU_OPS_CODES;
 
 mod cpu;
@@ -125,11 +125,12 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "54.e",
-      "86.e",
-      "86.n",
+      "1e.e",
+      "1e.n",
     ];
-    let targets = testcase("BRK");
-    let targets = testcases();
+    // let targets = testcases_by_name("BRK");
+    // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute);
+    // let targets = testcases();
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
@@ -178,11 +179,11 @@ fn main() {
         assert_eq!(cpu.register_a, data.Final.A, "[A] {:04X} {:04X}", cpu.register_a, data.Final.A);
         assert_eq!(cpu.register_x, data.Final.X, "[X] {:04X} {:04X}", cpu.register_x, data.Final.X);
         assert_eq!(cpu.register_y, data.Final.Y, "[Y] {:04X} {:04X}", cpu.register_y, data.Final.Y);
-        assert_eq!(cpu.status, data.Final.P, "[P] {:0>8b} {:0>8b}", cpu.status, data.Final.P);
         assert_eq!(cpu.data_bank, data.Final.Dbr, "[DBR] {:02X} {:02X}", cpu.data_bank, data.Final.Dbr);
         assert_eq!(cpu.direct_page, data.Final.D, "[DP] {:04X} {:04X}", cpu.direct_page, data.Final.D);
         assert_eq!(cpu.program_bank, data.Final.Pbr, "[PBR] {:02X} {:02X}", cpu.program_bank, data.Final.Pbr);
         assert_eq!(cpu.mode, data.Final.E);
+        assert_eq!(cpu.status, data.Final.P, "[P] {:0>8b} {:0>8b}", cpu.status, data.Final.P);
         for d in &data.Final.Ram {
           assert_eq!(cpu.mem_read(d.0), d.1, "[MEM] {:06X} {:02X} {:02X}", d.0, cpu.mem_read(d.0), d.1);
         }
@@ -207,10 +208,23 @@ fn testcases() -> Vec<String> {
   return ret
 }
 
-fn testcase(op: &str) -> Vec<String> {
+fn testcases_by_name(op: &str) -> Vec<String> {
   let mut ret: Vec<String> = vec![];
   for (key, value) in CPU_OPS_CODES.iter() {
     if value.name == op {
+      let e = format!("{:02X}.e", value.code);
+      ret.push(e);
+      let n = format!("{:02X}.n", value.code);
+      ret.push(n);
+    }
+  }
+  return ret;
+}
+
+fn testcases_by_addressing_mode(mode: &AddressingMode) -> Vec<String> {
+  let mut ret: Vec<String> = vec![];
+  for (key, value) in CPU_OPS_CODES.iter() {
+    if value.addressing_mode == *mode {
       let e = format!("{:02X}.e", value.code);
       ret.push(e);
       let n = format!("{:02X}.n", value.code);
