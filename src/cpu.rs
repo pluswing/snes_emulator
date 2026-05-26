@@ -279,12 +279,12 @@ impl CPU {
             AddressingMode::Absolute_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されているアドレスを表します。
                 // Xレジスタを足すのかYレジスタを足すのかで$1234,xと$1234,yという表し方があります。
-                let base = self.mem_read_u16(pc);
-                // println!("BASE {:06X}", base);
+                let base = self.force_wrapped_mem_read_u16(pc);
+                //println!("BASE {:06X}", base);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
-                // println!("+DBR {:06X}", addr);
+                //println!("+DBR {:06X}", addr);
                 let addr = addr.wrapping_add(self.get_register_x() as u32);
-                // println!("+X {:06X}", addr);
+                //println!("+X {:06X}", addr);
                 addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Indexed_by_Y => {
@@ -629,7 +629,7 @@ impl CPU {
       let y = if self.is_index_register_16bit_mode() {
         self._pop_u16()
       } else {
-        self._pop() as u16
+        self._force_wrapped_pop() as u16
       };
       self.set_register_y(y);
       self.update_zero_and_negative_flags_xy(y);
@@ -692,7 +692,7 @@ impl CPU {
       let addr = self.mem_read(addr);
       let addr = self.direct_page.wrapping_add(addr as u16) & 0x00FFFF;
       let value = self.wrapped_mem_read_u16(addr as u32);
-      self._push_u16(value as u16);
+      self._no_wrapped_push_u16(value as u16);
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
       let x = if self.is_index_register_16bit_mode() {
@@ -856,7 +856,7 @@ impl CPU {
     }
     pub fn tsc(&mut self, mode: &AddressingMode) {
         self.register_a = self.stack_pointer;
-        self.update_zero_and_negative_flags(self.register_a);
+        self._update_zero_and_negative_flags(self.register_a, true);
     }
     pub fn tyx(&mut self, mode: &AddressingMode) {
         let y = self.get_register_y();
@@ -1239,7 +1239,6 @@ impl CPU {
       println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
       self.stack_pointer = self.stack_pointer.wrapping_sub(1);
-      self.apply_mode(false);
     }
 
     pub fn _pop(&mut self) -> u8 {
@@ -1251,7 +1250,13 @@ impl CPU {
 
     pub fn _push_u16(&mut self, value: u16) {
         self._push((value >> 8) as u8);
+        self.apply_mode(false);
         self._push((value & 0x00FF) as u8);
+    }
+
+    pub fn _no_wrapped_push_u16(&mut self, value: u16) {
+      self._push((value >> 8) as u8);
+      self._push((value & 0x00FF) as u8);
     }
 
     pub fn _pop_u16(&mut self) -> u16 {
@@ -1646,9 +1651,9 @@ impl CPU {
             (value, carry)
         } else {
             let addr = self.get_operand_address(mode);
-            let value = self.mem_read_u16(addr);
+            let value = self.mem_read_auto(addr);
             let (value, carry) = self.overflowing_mul(value, 2);
-            self.mem_write_u16(addr, value); // TODO
+            self.mem_write_auto(addr, value);
             (value, carry)
         };
 

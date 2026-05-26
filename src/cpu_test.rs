@@ -128,9 +128,9 @@ fn main() {
       "1e.e",
       "1e.n",
     ];
-    // let targets = testcases_by_name("BRK");
-    // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute);
-    // let targets = testcases();
+    // let targets = testcases_by_name("TSC");
+    // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
+    let targets = testcases();
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
