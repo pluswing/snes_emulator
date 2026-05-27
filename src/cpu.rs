@@ -696,9 +696,9 @@ impl CPU {
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
       let x = if self.is_index_register_16bit_mode() {
-        self._pop_u16()
+        self._force_wrapped_pop_u16()
       } else {
-        self._pop() as u16
+        self._force_wrapped_pop() as u16
       };
       self.set_register_x(x);
       self.update_zero_and_negative_flags_xy(x);
@@ -715,17 +715,12 @@ impl CPU {
       // NOPと同じ。
     }
     pub fn cop(&mut self, mode: &AddressingMode) {
-      // FIXME
-      // program bank register (ネイティブモードの時。)
-      // program counter
-      // status register をスタックに積む
-      //  エミュレーションモード => pc = 0xFFF4の内容
-      //  ネイティブモード      => pc = $00:FFE4の内容にする。
       if self.is_native_mode() {
         self._push(self.program_bank);
       }
       // 仕様上は+2。run()で+1しているので、ここでは+1でOK。
-      self._push_u16(self.program_counter + 1);
+      self._force_wrapped_push_u16(self.program_counter + 1);
+      self.apply_mode(true); // FIXME
       self._push(self.status);
       self.program_bank = 0x00;
       if self.is_native_mode() {
@@ -735,8 +730,6 @@ impl CPU {
       }
       self.status = self.status | FLAG_INTERRRUPT;
       self.status = self.status & !FLAG_DECIMAL;
-      // opscodes.rsで自動加算されるため、調整。
-      self.program_counter = self.program_counter.wrapping_sub(1);
     }
     pub fn brl(&mut self, mode: &AddressingMode) {
         self._branch(mode, 0x00, false);
@@ -852,7 +845,7 @@ impl CPU {
         self._update_zero_and_negative_flags((a & 0xFF00) >> 8, false);
     }
     pub fn phd(&mut self, mode: &AddressingMode) {
-        self._push_u16(self.direct_page);
+        self._no_wrapped_push_u16(self.direct_page);
     }
     pub fn tsc(&mut self, mode: &AddressingMode) {
         self.register_a = self.stack_pointer;
@@ -891,7 +884,7 @@ impl CPU {
         }
     }
     pub fn plb(&mut self, mode: &AddressingMode) {
-      self.data_bank = self._pop();
+      self.data_bank = self._force_wrapped_pop();
       self._update_zero_and_negative_flags(self.data_bank as u16, false);
     }
     pub fn per(&mut self, mode: &AddressingMode) {
@@ -900,7 +893,7 @@ impl CPU {
       let arg_bytes = self.current_op.native.bytes - 1;
       let pc = pc + arg_bytes as u32;
       let value = (pc + value as u32) & 0x00FFFF;
-      self._push_u16(value as u16);
+      self._no_wrapped_push_u16(value as u16);
     }
     pub fn phb(&mut self, mode: &AddressingMode) {
       self._push(self.data_bank);
@@ -1129,17 +1122,17 @@ impl CPU {
     pub fn rti(&mut self, mode: &AddressingMode) {
       // スタックからプロセッサ フラグをプルし、続いてプログラム カウンタをプルします。
       if self.is_native_mode() {
-        self.status = self._pop();
+        self.status = self._force_wrapped_pop();
         self.clear_index_register_upper_byte();
       } else {
         let mask = !(FLAG_MEMORY_ACCUMULATOR_MODE | FLAG_INDEX_REGISTER_MODE);
-          self.status = (self._pop() & mask)
+          self.status = (self._force_wrapped_pop() & mask)
             | (self.status & FLAG_MEMORY_ACCUMULATOR_MODE)
             | (self.status & FLAG_INDEX_REGISTER_MODE);
       }
-      self.program_counter = self._pop_u16();
+      self.program_counter = self._force_wrapped_pop_u16();
       if self.is_native_mode() {
-        self.program_bank = self._pop();
+        self.program_bank = self._force_wrapped_pop();
       }
     }
 
@@ -1209,7 +1202,7 @@ impl CPU {
     }
 
     pub fn rts(&mut self, mode: &AddressingMode) {
-        self.program_counter = self._pop_u16().wrapping_add(1);
+        self.program_counter = self._force_wrapped_pop_u16().wrapping_add(1);
     }
 
     pub fn jsr(&mut self, mode: &AddressingMode) {
@@ -1254,6 +1247,12 @@ impl CPU {
         self._push((value & 0x00FF) as u8);
     }
 
+    pub fn _force_wrapped_push_u16(&mut self, value: u16) {
+        self._push((value >> 8) as u8);
+        self.apply_mode(true);
+        self._push((value & 0x00FF) as u8);
+    }
+
     pub fn _no_wrapped_push_u16(&mut self, value: u16) {
       self._push((value >> 8) as u8);
       self._push((value & 0x00FF) as u8);
@@ -1278,6 +1277,12 @@ impl CPU {
       let value = self.mem_read(self.stack_pointer as u32);
       println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
+    }
+
+    pub fn _force_wrapped_pop_u16(&mut self) -> u16 {
+      let lo = self._force_wrapped_pop();
+      let hi = self._force_wrapped_pop();
+      ((hi as u16) << 8) | lo as u16
     }
 
     pub fn jmp(&mut self, mode: &AddressingMode) {

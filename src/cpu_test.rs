@@ -125,8 +125,8 @@ fn main() {
       // "aa.n",
       // "e8.e", // INX
       // "54.e",
-      "1e.e",
-      "1e.n",
+      "02.e",//
+      "02.n",
     ];
     // let targets = testcases_by_name("TSC");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
