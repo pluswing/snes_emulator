@@ -296,7 +296,7 @@ impl CPU {
             AddressingMode::Absolute_Long_Indexed_by_X => {
                 // アドレス部の内容にインデクスレジスタの値を足したアドレスが目的のデータが格納されている24bitフルアドレスを表します。
                 // $123456,xと表します。絶対ロングアドレスインデクスYモードはありません。
-                let base = self.wrapped_mem_read_u16(pc);
+                let base = self.force_wrapped_mem_read_u16(pc);
                 let bank = self.mem_read((pc & 0xFF0000) | ((pc + 2) & 0x00FFFF));
                 let addr = ((bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.get_register_x() as u32);
@@ -645,6 +645,7 @@ impl CPU {
       let copy_bytes = self.get_register_c() as u32 + 1;
 
       // FIXME! for test
+      // program_counterの位置も1ずれるので、注意。
       // let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
       // println!("COPY_BYTES: {:04X}", copy_bytes);
 
@@ -763,6 +764,7 @@ impl CPU {
       let copy_bytes = self.get_register_c() as u32 + 1;
 
       // FIXME! for test
+      // program_counterの位置も1ずれるので、注意。
       // let copy_bytes = if copy_bytes > 0x0E { 0x0E } else { copy_bytes };
       // println!("COPY_BYTES: {:04X}", copy_bytes);
 
@@ -1156,9 +1158,9 @@ impl CPU {
 
     pub fn pla(&mut self, mode: &AddressingMode) {
       let a = if self.is_accumulator_16bit_mode() {
-        self._pop_u16()
+        self._force_wrapped_pop_u16()
       } else {
-        self._pop() as u16
+        self._force_wrapped_pop() as u16
       };
       self.set_register_a(a);
       self.update_zero_and_negative_flags(a);
@@ -1487,6 +1489,7 @@ impl CPU {
           self._push_u16(self.program_counter.wrapping_add(1));
 
           // 3. ステータスレジスタをスタックにプッシュします。
+          // self.apply_mode(true); // FIXME これいる？
           self._push(self.status);
 
           // 4. 割込禁止フラグをセットし、デシマルモードフラグをクリアします。
@@ -1502,6 +1505,7 @@ impl CPU {
           self._push_u16(self.program_counter.wrapping_add(1));
 
           // 2. ステータスレジスタをスタックにプッシュします。
+          self.apply_mode(true);
           self._push(self.status);
 
           // 3. ブレークモードフラグをセットし、SEIを実行してIRQ割込を禁止します
