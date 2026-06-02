@@ -142,9 +142,19 @@ impl CPU {
 
     // for TEST
     pub fn mem_read(&mut self, addr: u32) -> u8 {
+        // match (addr) {
+        //   0x2000 => {
+        //     ppu.read_ctrl(data)
+        //   }
+        // }
         self.memory[addr as usize]
     }
     pub fn mem_write(&mut self, addr: u32, data: u8) {
+        // match (addr) {
+        //   0x2000 => {
+        //     ppu.write_ctrl(data)
+        //   }
+        // }
         self.memory[addr as usize] = data;
     }
 
