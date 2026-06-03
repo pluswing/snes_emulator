@@ -1,6 +1,7 @@
 use log::{debug, info, trace};
 
 use crate::opscodes::{call, CPU_OPS_CODES};
+use crate::bus::{Mem, Bus};
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -120,44 +121,22 @@ pub struct CPU {
     pub data_bank: u8, // データバンクレジスタ (DBR)
     pub program_bank: u8, // プログラムバンクレジスタ (PBR)
     pub mode: u8, // E : エミュレーションフラグ (0 = Native Mode)
-    pub memory: Vec<u8>, // size=0xFFFFFF
-    // pub bus: Bus<'a>,
+    pub bus: Bus,
     current_op: OpCode,
 }
 
 pub static mut IN_TRACE: bool = false;
-/*
-impl Mem for CPU {
-    fn mem_read(&mut self, addr: u16) -> u8 {
-        self.bus.mem_read(addr)
-    }
 
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.bus.mem_write(addr, data)
-    }
+impl Mem for CPU {
+  fn mem_read(&mut self, addr: u32) -> u8 {
+    self.bus.mem_read(addr)
+  }
+  fn mem_write(&mut self, addr: u32, data: u8) {
+    self.bus.mem_write(addr, data)
+  }
 }
-*/
 
 impl CPU {
-
-    // for TEST
-    pub fn mem_read(&mut self, addr: u32) -> u8 {
-        // match (addr) {
-        //   0x2000 => {
-        //     ppu.read_ctrl(data)
-        //   }
-        // }
-        self.memory[addr as usize]
-    }
-    pub fn mem_write(&mut self, addr: u32, data: u8) {
-        // match (addr) {
-        //   0x2000 => {
-        //     ppu.write_ctrl(data)
-        //   }
-        // }
-        self.memory[addr as usize] = data;
-    }
-
     pub fn new() -> Self {
         Self {
             register_a: 0,
@@ -170,8 +149,7 @@ impl CPU {
             data_bank: 0,
             program_bank: 0,
             mode: MODE_16BIT,
-            memory: vec![0; 0x100_0000],
-            // bus: bus,
+            bus: Bus::new(),
             current_op: OpCode::new(
               0,
               "",

@@ -5,9 +5,12 @@ use std::fmt;
 
 use crate::cpu::{AddressingMode, CPU};
 use crate::opscodes::CPU_OPS_CODES;
+use crate::bus::Mem;
 
 mod cpu;
 mod opscodes;
+mod ppu;
+mod bus;
 
 /*
 {
@@ -130,7 +133,7 @@ fn main() {
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
-    let targets = testcases();
+    // let targets = testcases();
 
     for target in targets {
       let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
