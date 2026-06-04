@@ -575,10 +575,12 @@ impl CPU {
                 // if program_conter_state == self.program_counter {
                 //   self.program_counter += (op.len - 1) as u16
                 // }
+                self.bus.tick(if self.is_native_mode() { op.native.cycles } else { op.emulation.cycles })
             }
             _ => {} // panic!("no implementation {:<02X}", opscode),
         }
         self.apply_mode(true);
+
     }
 /* ファミコンの割り込み実装。
     fn interrupt_nmi(&mut self) {
