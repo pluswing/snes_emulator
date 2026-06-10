@@ -29,6 +29,7 @@ impl PPU {
   pub fn tick(&mut self, cycles: u8) {
     self.cycles += cycles as u32;
 
+    let X = 227;
     if self.cycles > X {
       self.cycles -= X;
       self.scanline += 1;

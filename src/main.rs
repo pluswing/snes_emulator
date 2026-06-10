@@ -2,7 +2,11 @@ mod cpu;
 mod opscodes;
 mod ppu;
 mod bus;
+mod cartridge;
+
+use cartridge::Cartridge;
 
 fn main() {
-    println!("Hello, world!");
+  let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
+  // let cpu = CPU::new();
 }
