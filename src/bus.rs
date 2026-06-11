@@ -1,19 +1,20 @@
-use crate::ppu::PPU;
+use crate::{cartridge::{self, Cartridge}, ppu::PPU};
 
 pub struct Bus {
   wram: Vec<u8>,
   ppu: PPU,
+  cartridge: Cartridge,
 
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
 }
 
 impl Bus {
-  pub fn new() -> Self {
+  pub fn new(ppu: PPU, cartridge: Cartridge) -> Self {
     Self {
       wram: vec![0; 0x1_0000 * 2],
-      ppu: PPU::new(),
-
+      ppu,
+      cartridge,
       memory: vec![0; 0x100_0000],
     }
   }

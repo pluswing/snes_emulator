@@ -137,7 +137,7 @@ impl Mem for CPU {
 }
 
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(bus: Bus) -> Self {
         Self {
             register_a: 0,
             register_x: 0,
@@ -149,7 +149,7 @@ impl CPU {
             data_bank: 0,
             program_bank: 0,
             mode: MODE_16BIT,
-            bus: Bus::new(),
+            bus,
             current_op: OpCode::new(
               0,
               "",

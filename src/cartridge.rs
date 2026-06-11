@@ -14,7 +14,15 @@ impl Cartridge {
     let mut rom = vec![0; metadata.len() as usize];
     f.read(&mut rom).expect("buffer overflow");
 
-    println!("{:02X?}", &rom[0xFFC0..=0xFFD4]);
+    // title
+    // println!("{:02X?}", &rom[0xFFC0..=0xFFD4]);
+    println!("MAPPING MODE: {:02X}, CHIPSET: {:02X}, ROM: {}KB, RAM: {}KB", rom[0xFFD5], rom[0xFFD6], 1 << rom[0xFFD7], 1 << rom[0xFFD8]);
+    if rom[0xFFDA] == 0x33 {
+      // 後期型拡張ヘッダあり
+      println!("後期型拡張ヘッダ: {:02X?}", &rom[0xFFB0..=0xFFBF]);
+    }
+    // MM: 0x31 = 0b0011_0001
+    // CS: 0x02 = ROM+RAM+Battery
     Self {
       rom
     }
