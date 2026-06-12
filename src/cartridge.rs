@@ -28,7 +28,50 @@ impl Cartridge {
     }
   }
 
-  fn read(&self, addr: u32) -> u8 {
-    self.rom[addr as usize]
+  fn mapping_mode(&self) -> u8 {
+    (self.rom[0xFFD5] & 0x08)
+  }
+
+  pub fn read(&self, bank: u8, addr: u16) -> u8 {
+    match self.mapping_mode() {
+      0x0 => {
+        // LoROM/32K Banks             Mode 20 (LoROM)
+        match bank {
+          0x00..=0x2F => {
+            match addr {
+              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000]
+              _ => panic!("should not reach")
+            }
+          }
+          0x30..=0x3F => {
+            match addr {
+              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000]
+              _ => panic!("should not reach")
+            }
+          }
+          0x40..=0x5F => {
+            match addr {
+              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000]
+              _ => panic!("should not reach")
+            }
+          }
+          0x70..=0x77	=> {
+            match addr {
+              0x0000..=0x7FFF => {
+                0 // FIXME Mode 20 SRAM (256Kバイト)
+              }
+            }
+          }
+          0x80..=0xDF => {
+            // FIXME: mirror
+          }
+        }
+      }
+      0x1 => {
+        // HiROM/64K Banks             Mode 21 (HiROM)
+        0
+      }
+      mode => panic!("invalid mapping mode {:02X}", mode)
+    }
   }
 }

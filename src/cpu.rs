@@ -498,12 +498,6 @@ impl CPU {
         }
     }
 
-    fn load_and_run(&mut self, program: Vec<u8>) {
-        self.load();
-        self.reset();
-        self.run();
-    }
-
     pub fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
@@ -511,12 +505,8 @@ impl CPU {
         // FIXME あってる？
         self.status = FLAG_INTERRRUPT | FLAG_BREAK2;
         self.stack_pointer = 0xFD;
-
-        self.program_counter = self.mem_read_u16(0xFFFC);
-    }
-
-    pub fn load(&mut self) {
-        // self.mem_write_u16(0xFFFC, 0x8000);
+        self.mode = MODE_8BIT;
+        self.program_counter = self.mem_read_u16(0x00_FFFC);
     }
 
     fn apply_mode(&mut self, force: bool) {
