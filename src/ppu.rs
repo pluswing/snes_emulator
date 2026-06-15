@@ -1,10 +1,12 @@
+use core::panic;
+
 pub struct PPU {
   cycles: u32,
   scanline: u8,
   // registers
-  pub ctrl: u8, // $2000
-  pub mask: u8, // $2001
-  pub status: u8, // $2002
+  pub inidisp: u8, // 2100h WO - INIDISP - ディスプレイ制御レジスタ1
+  pub bgmode: u8, // 2105h WO - BGMODE  - BG制御レジスタ
+  pub mosaic: u8, // 2106h WO - MOSAIC  - モザイク
 }
 
 impl PPU {
@@ -12,9 +14,9 @@ impl PPU {
     Self {
       cycles: 0,
       scanline: 0,
-      ctrl: 0,
-      mask: 0,
-      status: 0,
+      inidisp: 0x80,
+      bgmode: 0x0F,
+      mosaic: 0,
     }
   }
 
@@ -44,12 +46,22 @@ impl PPU {
     }
   }
 
-  pub fn write_ctrl(&mut self, value: u8) {
-    self.ctrl = value;
+  pub fn read(&self, addr: u16) -> u8 {
+    match addr {
+      0x2100 => self.inidisp,
+      0x2105 => self.bgmode,
+      0x2106 => self.mosaic,
+      _ => panic!("not implement PPU::read({:04X})", addr),
+    }
+  }
+  pub fn write(&mut self, addr: u16, data: u8) {
+    match addr {
+      0x2100 => self.inidisp = data,
+      0x2105 => self.bgmode = data,
+      0x2106 => self.mosaic = data,
+      _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
+    }
   }
 
-  pub fn read_ctrl(&self) -> u8 {
-    self.ctrl
-  }
 
 }

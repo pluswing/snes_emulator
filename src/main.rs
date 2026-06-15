@@ -20,7 +20,7 @@ fn main() {
   let mut cpu = CPU::new(bus);
 
   cpu.reset();
-  // loop {
-  //   cpu.run();
-  // }
+  loop {
+    cpu.run();
+  }
 }
