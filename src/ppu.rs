@@ -7,6 +7,13 @@ pub struct PPU {
   pub inidisp: u8, // 2100h WO - INIDISP - ディスプレイ制御レジスタ1
   pub bgmode: u8, // 2105h WO - BGMODE  - BG制御レジスタ
   pub mosaic: u8, // 2106h WO - MOSAIC  - モザイク
+  pub bg1sc: u8, // 2107h WO - BG1SC   - BG1画面設定
+  pub bg12nba: u8, // 210Bh WO - BG12NBA - BG1,2タイルデータアドレス
+  // 2byteあるっぽい
+  pub bg1hofs: u8, // 210Dh WO - BG1HOFS - BG1Xスクロール / M7HOFS
+  pub bg1vofs: u8, // 210Eh WO - BG1VOFS - BG1Yスクロール / M7VOFS
+
+  pub vmain: u8, // 2115h WO - VMAIN   - VRAMアドレス増加レジスタ
 }
 
 impl PPU {
@@ -17,6 +24,11 @@ impl PPU {
       inidisp: 0x80,
       bgmode: 0x0F,
       mosaic: 0,
+      bg1sc: 0,
+      bg12nba: 0,
+      bg1hofs: 0,
+      bg1vofs: 0,
+      vmain: 0x0F,
     }
   }
 
@@ -48,17 +60,25 @@ impl PPU {
 
   pub fn read(&self, addr: u16) -> u8 {
     match addr {
-      0x2100 => self.inidisp,
-      0x2105 => self.bgmode,
-      0x2106 => self.mosaic,
+      // 0x2100 => self.inidisp,
+      // 0x2105 => self.bgmode,
+      // 0x2106 => self.mosaic,
       _ => panic!("not implement PPU::read({:04X})", addr),
     }
   }
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
       0x2100 => self.inidisp = data,
-      0x2105 => self.bgmode = data,
+      0x2105 => {
+        println!("BGMODE: {:02X}", data);
+        self.bgmode = data
+      },
       0x2106 => self.mosaic = data,
+      0x2107 => self.bg1sc = data,
+      0x210B => self.bg12nba = data, // 04 => BG1 4 x 0x2000 ?
+      0x210D => self.bg1hofs = data,
+      0x210E => self.bg1vofs = data,
+      0x2115 => self.vmain = data,
       _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
     }
   }
