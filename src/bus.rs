@@ -74,6 +74,12 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
+          0x4200..=0x421F => {
+            // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
+            // ~
+            // 421Fh RO - JOY4H   - Joypad4レジスタ (上位8bit)
+            println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+          }
           // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
         }

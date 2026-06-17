@@ -10,10 +10,22 @@ pub struct PPU {
   pub bg1sc: u8, // 2107h WO - BG1SC   - BG1画面設定
   pub bg12nba: u8, // 210Bh WO - BG12NBA - BG1,2タイルデータアドレス
   // 2byteあるっぽい
+  // BGnHOFS の場合 : (NewByte<<8) | (PrevByte&~7) | ((CurrentValue>>8)&7)
+  // BGnVOFS の場合 : (NewByte<<8) | PrevByte
   pub bg1hofs: u8, // 210Dh WO - BG1HOFS - BG1Xスクロール / M7HOFS
   pub bg1vofs: u8, // 210Eh WO - BG1VOFS - BG1Yスクロール / M7VOFS
 
   pub vmain: u8, // 2115h WO - VMAIN   - VRAMアドレス増加レジスタ
+  cgadd: u8, // 2121h WO - CGADD   - パレットアドレス
+  // FIXME: 512 バイトある。
+  cgdata: u8, // 2122h WO - CGDATA  - パレット書き込み
+  tm: u8, // 212Ch WO - TM      - メイン画面レイヤ制御
+  ts: u8, // 212Dh WO - TS      - サブ画面レイヤ制御
+  tmw: u8, // 212Eh WO - TMW     - Window Area Main Screen Disable
+  cgwsel: u8, // 2130h WO - CGWSEL  - ColorMath制御レジスタA
+  cgadsub: u8, // 2131h WO - CGADSUB - ColorMath制御レジスタB
+  setini: u8, // 2133h WO - SETINI  - ディスプレイ制御レジスタ2
+  vmaddl: u8, // 2116h WO - VMADDL  - VRAMアドレス (下位8bit)
 }
 
 impl PPU {
@@ -29,6 +41,15 @@ impl PPU {
       bg1hofs: 0,
       bg1vofs: 0,
       vmain: 0x0F,
+      cgadd: 0,
+      cgdata: 0,
+      tm: 0,
+      ts: 0,
+      tmw: 0,
+      cgwsel: 0,
+      cgadsub: 0,
+      setini: 0,
+      vmaddl: 0,
     }
   }
 
@@ -76,9 +97,21 @@ impl PPU {
       0x2106 => self.mosaic = data,
       0x2107 => self.bg1sc = data,
       0x210B => self.bg12nba = data, // 04 => BG1 4 x 0x2000 ?
-      0x210D => self.bg1hofs = data,
+      0x210D => {
+        println!("BG1HOFS: {:02X}", data);
+        self.bg1hofs = data
+      }
       0x210E => self.bg1vofs = data,
       0x2115 => self.vmain = data,
+      0x2121 => self.cgadd = data,
+      0x2122 => self.cgdata = data,
+      0x212C => self.tm = data,
+      0x212D => self.ts = data,
+      0x212E => self.tmw = data,
+      0x2130 => self.cgwsel = data,
+      0x2131 => self.cgadsub = data,
+      0x2133 => self.setini = data,
+      0x2116 => self.vmaddl = data,
       _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
     }
   }
