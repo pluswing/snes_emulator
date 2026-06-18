@@ -25,7 +25,11 @@ pub struct PPU {
   cgwsel: u8, // 2130h WO - CGWSEL  - ColorMath制御レジスタA
   cgadsub: u8, // 2131h WO - CGADSUB - ColorMath制御レジスタB
   setini: u8, // 2133h WO - SETINI  - ディスプレイ制御レジスタ2
-  vmaddl: u8, // 2116h WO - VMADDL  - VRAMアドレス (下位8bit)
+  // 2116h WO - VMADDL  - VRAMアドレス (下位8bit)
+  // 2117h WO - VMADDH  - VRAMアドレス (上位8bit)
+  vmadd: u16,
+  vmdata: Vec<u8>
+  // 64K バイトあり。2ワード単位。半分ミラー。
 }
 
 impl PPU {
@@ -49,7 +53,8 @@ impl PPU {
       cgwsel: 0,
       cgadsub: 0,
       setini: 0,
-      vmaddl: 0,
+      vmadd: 0,
+      vmdata: vec![0, 0x10000],
     }
   }
 
@@ -87,6 +92,29 @@ impl PPU {
       _ => panic!("not implement PPU::read({:04X})", addr),
     }
   }
+
+  fn increment_vmdata(&mut self) {
+    // 7 上位/下位バイトにアクセスした後、VRAM アドレスをインクリメントします (0=下位、1=上位)
+    // 6-4 未使用
+    // 3-2 アドレス変換 (0..3 = 0 ビット/なし、8 ビット、9 ビット、10 ビット)
+    // 1-0 アドレスインクリメント ステップ (0..3 = ワード アドレスを 1、32、128、128 ずつインクリメント)
+    // let timing = (self.vmain & 0x80) >> 7;
+    // let address_transfer = (self.vmain & 0x0C) >> 2;
+    let step = (self.vmain & 0x03);
+    self.vmadd += match self.step {
+      0 => 1,
+      1 => 32,
+      2 | 3 => 128,
+      _ => panic!("invalid address increment step!"),
+    }
+  }
+
+  fn write_vmdatal(&mut self, data: u8) {
+  }
+
+  fn write_vmdatah(&mut self, data: u8) {
+  }
+
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
       0x2100 => self.inidisp = data,
@@ -111,7 +139,14 @@ impl PPU {
       0x2130 => self.cgwsel = data,
       0x2131 => self.cgadsub = data,
       0x2133 => self.setini = data,
-      0x2116 => self.vmaddl = data,
+      0x2116 => {
+        self.vmadd = (self.vmadd & 0xFF00) | (data as u16);
+      }
+      0x2117 => {
+        self.vmadd = (self.vmadd & 0x00FF) | ((data as u16) << 8)
+      }
+      0x2118 => self.write_vmdatal(data),
+      0x2119 => self.write_vmdatah(data),
       _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
     }
   }

@@ -41,6 +41,21 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
+          0x4210 => {
+            // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
+            0 // TODO VBLANKを返す
+          }
+          0x4211 => {
+            // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
+            0x80 // TODO
+          }
+          0x4212..=0x421F => {
+            println!("mem_read({:02X}:{:04X})", bank, addr);
+            0
+          }
+          // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
+          // ~
+          // 421Fh RO - JOY4H   - Joypad4レジスタ (上位8bit)
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -74,10 +89,16 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
-          0x4200..=0x421F => {
+          0x4200..=0x420D => {
             // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
             // ~
-            // 421Fh RO - JOY4H   - Joypad4レジスタ (上位8bit)
+            // 420Dh WO - MEMSEL  - WS2制御レジスタ
+            println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+          }
+          0x4300..=0x437F => {
+            // 43x0h RW - DMAPx   - DMA設定レジスタ
+            // ~
+            // 43xFh RW - MIRRx   - 43xBhのミラー (R/W)
             println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
           }
           // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
