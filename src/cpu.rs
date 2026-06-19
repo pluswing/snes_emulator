@@ -558,7 +558,7 @@ impl CPU {
         match op {
             Some(op) => {
 
-                println!("{:06X} {}", pc, op.name);
+                // println!("{:06X} {}", pc, op.name);
 
                 call(self, &op);
 
