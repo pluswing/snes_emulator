@@ -17,6 +17,8 @@ pub struct PPU {
 
   pub vmain: u8, // 2115h WO - VMAIN   - VRAMアドレス増加レジスタ
   cgadd: u8, // 2121h WO - CGADD   - パレットアドレス
+  // FIXME Vec<u16>にする。
+  // cgdata: Vec<u8>, // 2122h WO - CGDATA  - パレット書き込み
   cgdata: Vec<u8>, // 2122h WO - CGDATA  - パレット書き込み
   tm: u8, // 212Ch WO - TM      - メイン画面レイヤ制御
   ts: u8, // 212Dh WO - TS      - サブ画面レイヤ制御
@@ -146,9 +148,12 @@ impl PPU {
       }
       0x210E => self.bg1vofs = data,
       0x2115 => self.vmain = data,
-      0x2121 => self.cgadd = 0, // ゼロクリアになる。
+      0x2121 => {
+        self.cgadd = data;
+        // self.cgwrite_count = 0;
+      },
       0x2122 => {
-        println!("write cgadd {:02X} => {:02X}", self.cgadd, data);
+        println!("write cgdata {:02X} => {:02X}", self.cgadd, data);
         self.cgdata[self.cgadd as usize] = data;
         self.cgadd += 1;
       },
