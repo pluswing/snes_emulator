@@ -17,9 +17,9 @@ pub struct PPU {
 
   pub vmain: u8, // 2115h WO - VMAIN   - VRAMアドレス増加レジスタ
   cgadd: u8, // 2121h WO - CGADD   - パレットアドレス
-  // FIXME Vec<u16>にする。
+  cg_write_low: bool,
   // cgdata: Vec<u8>, // 2122h WO - CGDATA  - パレット書き込み
-  cgdata: Vec<u8>, // 2122h WO - CGDATA  - パレット書き込み
+  cgdata: Vec<u16>, // 2122h WO - CGDATA  - パレット書き込み
   tm: u8, // 212Ch WO - TM      - メイン画面レイヤ制御
   ts: u8, // 212Dh WO - TS      - サブ画面レイヤ制御
   tmw: u8, // 212Eh WO - TMW     - Window Area Main Screen Disable
@@ -46,6 +46,7 @@ impl PPU {
       bg1vofs: 0,
       vmain: 0x0F,
       cgadd: 0,
+      cg_write_low: true,
       cgdata: vec![0; 512], // 256 word
       tm: 0,
       ts: 0,
@@ -116,7 +117,7 @@ impl PPU {
 
   fn write_vmdatal(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7F) as usize;
-    self.vmdata[vmadd] = (self.vmdata[vmadd] & 0xFF00) | (data as u16);
+    self.vmdata[vmadd] = self.replace_lsb(self.vmdata[vmadd], data);
     println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 0 {
       self.increment_vmadd();
@@ -125,11 +126,19 @@ impl PPU {
 
   fn write_vmdatah(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7F) as usize;
-    self.vmdata[vmadd] = (self.vmdata[vmadd] & 0x00FF) | ((data as u16) << 8);
+    self.vmdata[vmadd] = self.replace_hsb(self.vmdata[vmadd], data);
     println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 1 {
       self.increment_vmadd();
     }
+  }
+
+  fn replace_lsb(&self, data: u16, value: u8) -> u16 {
+    (data & 0xFF00) | (value as u16)
+  }
+
+  fn replace_hsb(&self, data: u16, value: u8) -> u16 {
+    (data & 0x00FF) | ((value as u16) << 8)
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
@@ -150,12 +159,17 @@ impl PPU {
       0x2115 => self.vmain = data,
       0x2121 => {
         self.cgadd = data;
-        // self.cgwrite_count = 0;
+        self.cg_write_low = true;
       },
       0x2122 => {
-        println!("write cgdata {:02X} => {:02X}", self.cgadd, data);
-        self.cgdata[self.cgadd as usize] = data;
-        self.cgadd += 1;
+        println!("write cgdata(low={}) {:02X} => {:02X}", self.cg_write_low, self.cgadd, data);
+        if self.cg_write_low {
+          self.cgdata[self.cgadd as usize] = self.replace_lsb(self.cgdata[self.cgadd as usize], data);
+        } else {
+          self.cgdata[self.cgadd as usize] = self.replace_hsb(self.cgdata[self.cgadd as usize], data);
+          self.cgadd += 1;
+        }
+        self.cg_write_low = !self.cg_write_low;
       },
       0x212C => self.tm = data,
       0x212D => self.ts = data,
@@ -164,10 +178,10 @@ impl PPU {
       0x2131 => self.cgadsub = data,
       0x2133 => self.setini = data,
       0x2116 => {
-        self.vmadd = (self.vmadd & 0xFF00) | (data as u16);
+        self.vmadd = self.replace_lsb(self.vmadd, data);
       }
       0x2117 => {
-        self.vmadd = (self.vmadd & 0x00FF) | ((data as u16) << 8)
+        self.vmadd = self.replace_hsb(self.vmadd, data);
       }
       0x2118 => self.write_vmdatal(data),
       0x2119 => self.write_vmdatah(data),

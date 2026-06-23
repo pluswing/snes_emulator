@@ -9,7 +9,26 @@ use bus::Bus;
 use cpu::CPU;
 use ppu::PPU;
 
+use sdl3::pixels::Color;
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use std::time::Duration;
+
 fn main() {
+
+  let sdl_context = sdl3::init().unwrap();
+  let video_subsystem = sdl_context.video().unwrap();
+  let window = video_subsystem.window("SNES Emulator", 512, 448)
+        .position_centered()
+        .build()
+        .unwrap();
+
+  let mut canvas = window.into_canvas();
+  canvas.set_draw_color(Color::RGB(0, 255, 255));
+  canvas.clear();
+  canvas.present();
+  let mut event_pump = sdl_context.event_pump().unwrap();
+
   let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
   // let mut cartridge = Cartridge::new("rom/SNES/ROM/CHRONO TRIGGER/50/Chrono Trigger (Japan).sfc");
   let mut ppu = PPU::new();
@@ -20,7 +39,20 @@ fn main() {
   let mut cpu = CPU::new(bus);
 
   cpu.reset();
-  loop {
+
+  'running: loop {
     cpu.run();
+    canvas.clear();
+    for event in event_pump.poll_iter() {
+      match event {
+        Event::Quit {..} |
+        Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+            break 'running
+        },
+        _ => {}
+      }
+    }
+    canvas.present();
+    ::std::thread::sleep(Duration::new(0,   1_000_000_000u32 / 60));
   }
 }
