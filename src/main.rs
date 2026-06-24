@@ -9,7 +9,7 @@ use bus::Bus;
 use cpu::CPU;
 use ppu::PPU;
 
-use sdl3::pixels::Color;
+use sdl3::pixels::{Color, PixelFormat};
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
 use std::time::Duration;
@@ -24,9 +24,16 @@ fn main() {
         .unwrap();
 
   let mut canvas = window.into_canvas();
-  canvas.set_draw_color(Color::RGB(0, 255, 255));
+
+  let creator = canvas.texture_creator();
+  let mut texture = creator
+    .create_texture_target(PixelFormat::RGB24, 512, 448)
+    .unwrap();
+
+  canvas.set_draw_color(Color::RGB(0, 0, 0));
   canvas.clear();
   canvas.present();
+
   let mut event_pump = sdl_context.event_pump().unwrap();
 
   let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
@@ -42,7 +49,9 @@ fn main() {
 
   'running: loop {
     cpu.run();
-    canvas.clear();
+    // TODO ppuのフレーム更新がされた時だけ、
+    // イベントの処理↓
+    // とウインドウの更新を行う。
     for event in event_pump.poll_iter() {
       match event {
         Event::Quit {..} |
@@ -52,7 +61,12 @@ fn main() {
         _ => {}
       }
     }
+
+    canvas.clear();
+    // texture.update(None, &screen_state, 512 * 3).unwrap();
+    // canvas.copy(&texture, None, None).unwrap();
     canvas.present();
+
     ::std::thread::sleep(Duration::new(0,   1_000_000_000u32 / 60));
   }
 }

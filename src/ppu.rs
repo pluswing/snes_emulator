@@ -29,7 +29,11 @@ pub struct PPU {
   // 2116h WO - VMADDL  - VRAMアドレス (下位8bit)
   // 2117h WO - VMADDH  - VRAMアドレス (上位8bit)
   vmadd: u16,
-  vmdata: Vec<u16>
+  // 2118h WO - VMDATAL - VRAMデータ書き込み (下位8bit)
+  // 2119h WO - VMDATAH - VRAMデータ書き込み (上位8bit)
+  vmdata: Vec<u16>,
+  // 213Ch RO - OPHCT   - Hカウンタ
+  // 213Dh RO - OPVCT   - Vカウンタ
 }
 
 impl PPU {
@@ -70,14 +74,20 @@ impl PPU {
   pub fn tick(&mut self, cycles: u8) {
     self.cycles += cycles as u32;
 
-    let X = 227;
-    if self.cycles > X {
-      self.cycles -= X;
+    let line_par_cycles = 227;
+    if self.cycles > line_par_cycles {
+      self.cycles -= line_par_cycles;
       self.scanline += 1;
-      // HBlank割り込み = 1行描画
+
+      if self.scanline <= 224 {
+        // HBlank割り込み = 1行描画
+        self.interrupt_hbank();
+        self.draw_line(self.scanline);
+      }
     }
     if self.scanline > 224 {
       // VBlank割り込み = WAIT
+      self.interrupt_vbank();
     }
     if self.scanline > 234 {
       // FIXME
@@ -85,13 +95,16 @@ impl PPU {
     }
   }
 
-  pub fn read(&self, addr: u16) -> u8 {
-    match addr {
-      // 0x2100 => self.inidisp,
-      // 0x2105 => self.bgmode,
-      // 0x2106 => self.mosaic,
-      _ => panic!("not implement PPU::read({:04X})", addr),
-    }
+  fn interrupt_hbank(&mut self) {
+
+  }
+
+  fn interrupt_vbank(&mut self) {
+
+  }
+
+  fn draw_line(&mut self, scanline: u8) {
+
   }
 
   fn increment_timing(&self) -> u8 {
@@ -126,7 +139,7 @@ impl PPU {
 
   fn write_vmdatah(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7F) as usize;
-    self.vmdata[vmadd] = self.replace_hsb(self.vmdata[vmadd], data);
+    self.vmdata[vmadd] = self.replace_msb(self.vmdata[vmadd], data);
     println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 1 {
       self.increment_vmadd();
@@ -137,7 +150,7 @@ impl PPU {
     (data & 0xFF00) | (value as u16)
   }
 
-  fn replace_hsb(&self, data: u16, value: u8) -> u16 {
+  fn replace_msb(&self, data: u16, value: u8) -> u16 {
     (data & 0x00FF) | ((value as u16) << 8)
   }
 
@@ -166,7 +179,7 @@ impl PPU {
         if self.cg_write_low {
           self.cgdata[self.cgadd as usize] = self.replace_lsb(self.cgdata[self.cgadd as usize], data);
         } else {
-          self.cgdata[self.cgadd as usize] = self.replace_hsb(self.cgdata[self.cgadd as usize], data);
+          self.cgdata[self.cgadd as usize] = self.replace_msb(self.cgdata[self.cgadd as usize], data);
           self.cgadd += 1;
         }
         self.cg_write_low = !self.cg_write_low;
@@ -181,7 +194,7 @@ impl PPU {
         self.vmadd = self.replace_lsb(self.vmadd, data);
       }
       0x2117 => {
-        self.vmadd = self.replace_hsb(self.vmadd, data);
+        self.vmadd = self.replace_msb(self.vmadd, data);
       }
       0x2118 => self.write_vmdatal(data),
       0x2119 => self.write_vmdatah(data),
@@ -189,5 +202,18 @@ impl PPU {
     }
   }
 
+
+  pub fn read(&self, addr: u16) -> u8 {
+    match addr {
+      0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ
+        // 今書いているx, yの座標をとってきて、
+        // 213Ch RO - OPHCT   - Hカウンタ                       (01FFh)
+        // 213Dh RO - OPVCT   - Vカウンタ                       (01FFh)
+        // にセットする
+        0 // TODO オープンバス
+      }
+      _ => panic!("not implement PPU::read({:04X})", addr),
+    }
+  }
 
 }
