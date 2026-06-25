@@ -49,24 +49,25 @@ fn main() {
 
   'running: loop {
     cpu.run();
-    // TODO ppuのフレーム更新がされた時だけ、
-    // イベントの処理↓
-    // とウインドウの更新を行う。
-    for event in event_pump.poll_iter() {
-      match event {
-        Event::Quit {..} |
-        Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-            break 'running
-        },
-        _ => {}
+    if cpu.bus.ppu.frame_updated {
+      cpu.bus.ppu.frame_updated = false;
+
+      for event in event_pump.poll_iter() {
+        match event {
+          Event::Quit {..} |
+          Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+              break 'running
+          },
+          _ => {}
+        }
       }
+
+      canvas.clear();
+      texture.update(None, &cpu.bus.ppu.screen_state, 256 * 3).unwrap();
+      canvas.copy(&texture, None, None).unwrap();
+      canvas.present();
     }
 
-    canvas.clear();
-    // texture.update(None, &screen_state, 512 * 3).unwrap();
-    // canvas.copy(&texture, None, None).unwrap();
-    canvas.present();
-
-    ::std::thread::sleep(Duration::new(0,   1_000_000_000u32 / 60));
+    // ::std::thread::sleep(Duration::new(0,   1_000_000_000u32 / 60));
   }
 }

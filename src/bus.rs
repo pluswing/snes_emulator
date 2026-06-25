@@ -2,7 +2,7 @@ use crate::{cartridge::{self, Cartridge}, ppu::PPU};
 
 pub struct Bus {
   wram: Vec<u8>,
-  ppu: PPU,
+  pub ppu: PPU,
   cartridge: Cartridge,
 
   // FIXME とりあえず
@@ -43,7 +43,7 @@ impl Mem for Bus {
           0x2100..=0x213F => self.ppu.read(addr),
           0x4210 => {
             // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
-            0 // TODO VBLANKを返す
+            self.ppu.read(addr)
           }
           0x4211 => {
             // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ

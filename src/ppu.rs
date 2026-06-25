@@ -34,6 +34,13 @@ pub struct PPU {
   vmdata: Vec<u16>,
   // 213Ch RO - OPHCT   - Hカウンタ
   // 213Dh RO - OPVCT   - Vカウンタ
+
+  // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
+  rdnmi: u8,
+
+  // flags
+  pub frame_updated: bool,
+  pub screen_state: Vec<u8>,
 }
 
 impl PPU {
@@ -60,6 +67,10 @@ impl PPU {
       setini: 0,
       vmadd: 0,
       vmdata: vec![0; 32 * 1024], // 32K Word
+      rdnmi: 0x02,
+
+      frame_updated: false,
+      screen_state: vec![0; 256 * 224 * 3],
     }
   }
 
@@ -88,11 +99,21 @@ impl PPU {
     if self.scanline > 224 {
       // VBlank割り込み = WAIT
       self.interrupt_vbank();
+      self.frame_updated = true;
     }
     if self.scanline > 234 {
       // FIXME
       self.scanline = 0;
+      self.clear_nmi();
     }
+  }
+
+  fn set_nmi(&mut self) {
+    self.rdnmi = self.rdnmi | 0x80;
+  }
+
+  fn clear_nmi(&mut self) {
+    self.rdnmi = self.rdnmi & 0x0F;
   }
 
   fn interrupt_hbank(&mut self) {
@@ -100,11 +121,12 @@ impl PPU {
   }
 
   fn interrupt_vbank(&mut self) {
-
+    self.set_nmi()
   }
 
   fn draw_line(&mut self, scanline: u8) {
-
+    self.screen_state[0] = 255;
+    self.screen_state[1] = 255;
   }
 
   fn increment_timing(&self) -> u8 {
@@ -203,7 +225,7 @@ impl PPU {
   }
 
 
-  pub fn read(&self, addr: u16) -> u8 {
+  pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
       0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ
         // 今書いているx, yの座標をとってきて、
@@ -211,6 +233,11 @@ impl PPU {
         // 213Dh RO - OPVCT   - Vカウンタ                       (01FFh)
         // にセットする
         0 // TODO オープンバス
+      }
+      0x4210 => {
+        let res = self.rdnmi;
+        self.clear_nmi();
+        res
       }
       _ => panic!("not implement PPU::read({:04X})", addr),
     }
