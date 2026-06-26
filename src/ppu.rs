@@ -124,9 +124,41 @@ impl PPU {
     self.set_nmi()
   }
 
+  fn bg1tilemaps(&mut self) -> &[u16] {
+    let base = (((self.bg1sc & 0xFC) as u32) << 8) as usize;
+    let tilemaps = &self.vmdata[base..=(base + 32 * 32)];
+    tilemaps
+  }
+
+  fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
+    // bgモードみる
+    //  -> いまは2bpp固定
+    let tilesize: usize = 8; // これが2bpp
+    let addr = tilesize * tileindex as usize;
+    let data = &self.vmdata[addr..=(addr + tilesize)];
+    data
+  }
+
   fn draw_line(&mut self, scanline: u8) {
     self.screen_state[0] = 255;
     self.screen_state[1] = 255;
+    let tilemaps = self.bg1tilemaps();
+    // [33] = 0052, 0075, 006E, 006E, 0069, 006E, 0067, 0020, 0074, 0065, 0073
+    let tilemap = tilemaps[33];
+
+    if tilemap == 0 {
+      return;
+    }
+
+    // tilemap = VHPC CCTT TTTT TTTT
+    let tileindex = tilemap & 0x02FF;
+    let palette_select = (tilemap & 0x1C00) >> 10;
+    panic!("{:04X}, {:04X}", tileindex, palette_select)
+
+    // tileをとって
+    // paletteをとって
+    // ピクセルの色が決まって
+    // かく！
   }
 
   fn increment_timing(&self) -> u8 {
