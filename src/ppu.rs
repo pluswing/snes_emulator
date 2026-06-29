@@ -1,5 +1,16 @@
 use core::panic;
 
+fn bgr555_to_rgb888(data: u16) -> [u8; 3] {
+  // .BBB BBGG GGGR RRRR
+  let r = (data & 0x001F) as u8;
+  let g = ((data >> 5) & 0x001F) as u8;
+  let b = ((data >> 10) & 0x001F) as u8;
+  let r = r << 3 | (r >> 2 & 0x07);
+  let g = g << 3 | (g >> 2 & 0x07);
+  let b = b << 3 | (b >> 2 & 0x07);
+  [r, g, b]
+}
+
 pub struct PPU {
   cycles: u32,
   scanline: u8,
@@ -133,11 +144,24 @@ impl PPU {
   fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
     // bgモードみる
     //  -> いまは2bpp固定
-    let tilesize: usize = 8; // これが2bpp
+    let tilesize: usize = 2 /*bpp*/ * 8 /* 8x8mode */ / 2 /*byte to word */;
     let addr = tilesize * tileindex as usize;
     let data = &self.vmdata[addr..=(addr + tilesize)];
     data
   }
+
+  fn palette(&mut self, palette_size: u16) -> Vec<[u8; 3]> {
+    // 2bpp固定
+    let base =  palette_size as usize;
+    let palette_size = 4; // 2bpp
+    let data = &self.cgdata[base..=base + palette_size];
+    let mut res: Vec<[u8; 3]> = vec![];
+    for v in data {
+      res.push(bgr555_to_rgb888(*v));
+    }
+    res
+  }
+
 
   fn draw_line(&mut self, scanline: u8) {
     self.screen_state[0] = 255;
@@ -153,12 +177,22 @@ impl PPU {
     // tilemap = VHPC CCTT TTTT TTTT
     let tileindex = tilemap & 0x02FF;
     let palette_select = (tilemap & 0x1C00) >> 10;
-    panic!("{:04X}, {:04X}", tileindex, palette_select)
+    panic!("{:04X}, {:04X}", tileindex, palette_select);
 
     // tileをとって
+    let tile = self.bg1tile(tileindex);
     // paletteをとって
     // ピクセルの色が決まって
+    let palette = self.palette(palette_select);
+
     // かく！
+    for line in tile {
+      let palette_index = ((line & 0x8000) >> 15) + ((line & 0x0080) >> 7);
+      let rgb = palette[palette_index as usize];
+      self.screen_state[0] = rgb[0];
+      self.screen_state[1] = rgb[1];
+      self.screen_state[2] = rgb[2];
+    }
   }
 
   fn increment_timing(&self) -> u8 {
