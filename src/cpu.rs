@@ -558,7 +558,7 @@ impl CPU {
         match op {
             Some(op) => {
 
-                println!("{:06X} {}", pc, op.name);
+                // println!("{:06X} {}", pc, op.name);
 
                 call(self, &op);
 
@@ -1514,7 +1514,7 @@ impl CPU {
     pub fn bit(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_u16(addr);
-        println!("ADDR: {:06X} VALUE: {:06X}", addr, value);
+        // println!("ADDR: {:06X} VALUE: {:06X}", addr, value);
 
         let zero = self.get_register_a() & value;
         if zero == 0 {

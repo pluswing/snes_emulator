@@ -81,7 +81,7 @@ impl PPU {
       rdnmi: 0x02,
 
       frame_updated: false,
-      screen_state: vec![0; 256 * 224 * 3],
+      screen_state: vec![0; 256 * 256 * 3], // 224
     }
   }
 
@@ -104,11 +104,11 @@ impl PPU {
       if self.scanline <= 224 {
         // HBlank割り込み = 1行描画
         self.interrupt_hbank();
-        self.draw_line(self.scanline);
       }
     }
     if self.scanline > 224 {
       // VBlank割り込み = WAIT
+      self.draw_line(self.scanline);
       self.interrupt_vbank();
       self.frame_updated = true;
     }
@@ -162,36 +162,37 @@ impl PPU {
     res
   }
 
-
   fn draw_line(&mut self, scanline: u8) {
-    self.screen_state[0] = 255;
-    self.screen_state[1] = 255;
-    let tilemaps = self.bg1tilemaps();
+    let tilemaps = self.bg1tilemaps().to_vec();
     // [33] = 0052, 0075, 006E, 006E, 0069, 006E, 0067, 0020, 0074, 0065, 0073
-    let tilemap = tilemaps[33];
+    for (i, tilemap) in tilemaps.iter().enumerate() {
+      let tx = (i % 32) * 8;
+      let ty = (i / 32) * 8;
+      // tilemap = VHPC CCTT TTTT TTTT
+      let tileindex = tilemap & 0x02FF;
+      let palette_select = (tilemap & 0x1C00) >> 10;
 
-    if tilemap == 0 {
-      return;
-    }
+      // tileをとって
+      let tile = self.bg1tile(tileindex).to_vec();
+      // paletteをとって
+      // ピクセルの色が決まって
+      let palette = self.palette(palette_select);
 
-    // tilemap = VHPC CCTT TTTT TTTT
-    let tileindex = tilemap & 0x02FF;
-    let palette_select = (tilemap & 0x1C00) >> 10;
-    panic!("{:04X}, {:04X}", tileindex, palette_select);
-
-    // tileをとって
-    let tile = self.bg1tile(tileindex);
-    // paletteをとって
-    // ピクセルの色が決まって
-    let palette = self.palette(palette_select);
-
-    // かく！
-    for line in tile {
-      let palette_index = ((line & 0x8000) >> 15) + ((line & 0x0080) >> 7);
-      let rgb = palette[palette_index as usize];
-      self.screen_state[0] = rgb[0];
-      self.screen_state[1] = rgb[1];
-      self.screen_state[2] = rgb[2];
+      // かく！
+      for (y, line) in tile.iter().enumerate() {
+        for x in 0..8 {
+          let mask = 0x80 >> x;
+          let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+          let rgb = palette[palette_index as usize];
+          if ty > 230 {
+            continue;
+          }
+          let base_index = ((ty + y) * 256 + x + tx) * 3;
+          self.screen_state[base_index + 0] = rgb[0];
+          self.screen_state[base_index + 1] = rgb[1];
+          self.screen_state[base_index + 2] = rgb[2];
+        }
+      }
     }
   }
 
