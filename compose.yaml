@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    init: true
+    volumes:
+      - .:/app
+    ports:
+      - "127.0.0.1:6080:6080"
+    environment:
+      DISPLAY: ":99"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      SDL_VIDEODRIVER: x11
+      XVFB_RESOLUTION: 1024x768x24
+    tty: true
+    stdin_open: true
+    command: sleep infinity
