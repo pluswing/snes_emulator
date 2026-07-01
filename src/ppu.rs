@@ -145,7 +145,8 @@ impl PPU {
     // bgモードみる
     //  -> いまは2bpp固定
     let tilesize: usize = 2 /*bpp*/ * 8 /* 8x8mode */ / 2 /*byte to word */;
-    let addr = tilesize * tileindex as usize;
+    let base = (((self.bg12nba & 0x0F) as u32) << 12) as usize;
+    let addr = base + tilesize * tileindex as usize;
     let data = &self.vmdata[addr..=(addr + tilesize)];
     data
   }

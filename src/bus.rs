@@ -89,6 +89,10 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
+          0x420B => {
+            // 420Bh WO - MDMAEN  - GDMAチャネルレジスタ 0
+            panic!("MDMAEN");
+          },
           0x4200..=0x420D => {
             // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
             // ~
