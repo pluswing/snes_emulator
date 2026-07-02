@@ -7,6 +7,22 @@ pub struct Bus {
 
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
+
+  // DMA
+  dmap0: u8, // 43x0h RW - DMAPx   - DMA設定レジスタ
+  bbad0: u8, // 43x1h RW - BBADx   - DBバスアドレス
+  a1t0l: u8, // 43x2h RW - A1TxL   - Aバスアドレス (low)
+  a1t0h: u8, // 43x3h RW - A1TxH   - Aバスアドレス (high)
+  a1b0: u8, // 43x4h RW - A1Bx    - Aバスアドレス (bank)
+  das0l: u8, // 43x5h RW - DASxL   - Indirect HDMA Address (low)  / DMA Byte-Counter (low)
+  das0h: u8, // 43x6h RW - DASxH   - Indirect HDMA Address (high) / DMA Byte-Counter (high)
+
+  /*
+  43x7h RW - DASBx   - Indirect HDMA Address (bank)                          (FFh)
+  43x8h RW - A2AxL   - HDMA Table Current Address (low)                      (FFh)
+  43x9h RW - A2AxH   - HDMA Table Current Address (high)                     (FFh)
+  43xAh RW - NTRLx   - HDMA Line-Counter (from current Table entry)          (FFh)
+  */
 }
 
 impl Bus {
@@ -16,12 +32,37 @@ impl Bus {
       ppu,
       cartridge,
       memory: vec![0; 0x100_0000],
+      dmap0: 0xFF,
+      bbad0: 0xFF,
+      a1t0l: 0xFF,
+      a1t0h: 0xFF,
+      a1b0: 0x00,
+      das0l: 0xFF,
+      das0h: 0xFF,
     }
   }
 
   pub fn tick(&mut self, cycles: u8) {
     self.ppu.tick(cycles);
   }
+
+  fn write_dma_registers(&mut self, addr: u16, data: u8) {
+    // 43x0h RW - DMAPx   - DMA設定レジスタ
+    // ~
+    // 43xFh RW - MIRRx   - 43xBhのミラー (R/W)
+    match addr {
+      0x4300 => {
+        self.dmap0 = data;
+        self.do_transfer();
+      }
+      _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
+    }
+  }
+
+  fn do_transfer(&mut self) {
+    // TODO
+  }
+
 }
 
 pub trait Mem {
@@ -91,7 +132,7 @@ impl Mem for Bus {
           0x2100..=0x213F => self.ppu.write(addr, data),
           0x420B => {
             // 420Bh WO - MDMAEN  - GDMAチャネルレジスタ 0
-            panic!("MDMAEN");
+            // panic!("MDMAEN");
           },
           0x4200..=0x420D => {
             // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
@@ -100,10 +141,7 @@ impl Mem for Bus {
             println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
           }
           0x4300..=0x437F => {
-            // 43x0h RW - DMAPx   - DMA設定レジスタ
-            // ~
-            // 43xFh RW - MIRRx   - 43xBhのミラー (R/W)
-            println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+            self.write_dma_registers(addr, data);
           }
           // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
