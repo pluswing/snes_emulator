@@ -14,13 +14,16 @@ pub struct Bus {
 
   // DMA
   mdmean: u8, // 420Bh WO - MDMAEN  - GDMAチャネルレジスタ
-  dmap0: u8, // 43x0h RW - DMAPx   - DMA設定レジスタ
-  bbad0: u8, // 43x1h RW - BBADx   - DBバスアドレス
-  a1t0l: u8, // 43x2h RW - A1TxL   - Aバスアドレス (low)
-  a1t0h: u8, // 43x3h RW - A1TxH   - Aバスアドレス (high)
-  a1b0: u8, // 43x4h RW - A1Bx    - Aバスアドレス (bank)
-  das0l: u8, // 43x5h RW - DASxL   - Indirect HDMA Address (low)  / DMA Byte-Counter (low)
-  das0h: u8, // 43x6h RW - DASxH   - Indirect HDMA Address (high) / DMA Byte-Counter (high)
+  dmap: [u8; 8], // 43x0h RW - DMAPx   - DMA設定レジスタ
+  bbad: [u8; 8], // 43x1h RW - BBADx   - DBバスアドレス
+  // 43x2h RW - A1TxL   - Aバスアドレス (low)
+  // 43x3h RW - A1TxH   - Aバスアドレス (high)
+  // 43x4h RW - A1Bx    - Aバスアドレス (bank)
+  a1: [u32; 8],
+  // 43x5h RW - DASxL   - Indirect HDMA Address (low)  / DMA Byte-Counter (low)
+  // 43x6h RW - DASxH   - Indirect HDMA Address (high) / DMA Byte-Counter (high)
+  // 43x7h RW - DASBx   - Indirect HDMA Address (bank)
+  das: [u32; 8],
 
   /*
   43x7h RW - DASBx   - Indirect HDMA Address (bank)                          (FFh)
@@ -39,13 +42,10 @@ impl Bus {
       memory: vec![0; 0x100_0000],
 
       mdmean: 0x00,
-      dmap0: 0xFF,
-      bbad0: 0xFF,
-      a1t0l: 0xFF,
-      a1t0h: 0xFF,
-      a1b0: 0x00,
-      das0l: 0xFF,
-      das0h: 0xFF,
+      dmap: [0xFF; 8],
+      bbad: [0xFF; 8],
+      a1: [0x00FFFF; 8],
+      das: [0xFFFFFF; 8],
     }
   }
 
@@ -65,17 +65,18 @@ impl Bus {
       }
       0x4300 => {
         // 転送設定
-        self.dmap0 = data; // 0x09 = 00001001
+        self.dmap[0] = data; // 0x09 = 00001001
       }
       // PPU アドレス (to)
-      0x4301 => self.bbad0 = data,
+      0x4301 => self.bbad[0] = data,
       // Memory アドレス (from)
-      0x4302 => self.a1t0l = data,
-      0x4303 => self.a1t0h = data,
-      0x4304 => self.a1b0 = data,
+      0x4302 => self.a1[0] = (self.a1[0] & 0xFFFF00) | (data as u32),
+      0x4303 => self.a1[0] = (self.a1[0] & 0xFF00FF) | ((data as u32) << 8),
+      0x4304 => self.a1[0] = (self.a1[0] & 0x00FFFF) | ((data as u32) << 16),
       // 転送サイズ
-      0x4305 => self.das0l = data,
-      0x4306 => self.das0h = data,
+      0x4305 => self.das[0] = (self.das[0] & 0xFFFF00) | (data as u32),
+      0x4306 => self.das[0] = (self.das[0] & 0xFF00FF) | ((data as u32) << 8),
+      0x4307 => self.das[0] = (self.das[0] & 0x00FFFF) | ((data as u32) << 16),
       _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
     }
   }
@@ -88,16 +89,18 @@ impl Bus {
       // 1バイトごとにDMAアドレスがインクリメント
       // DMAアドレスは固定されない
       // 2レジスタ1書き込み	2 バイト: p, p+1
-      let mut memory_addr = (self.a1b0 as u32) << 16 | (self.a1t0h as u32) << 8 | (self.a1t0l as u32);
-      let ppu_addr = 0x002100 | (self.bbad0 as u32); // $00:2100 ～ $00:21ff
-      let transfer_size = (self.das0h as u32) << 8 | (self.das0l as u32);
+      let mut memory_addr = self.a1[0];
+      let ppu_addr = 0x002100 | (self.bbad[0] as u32); // $00:2100 ～ $00:21ff
+      let transfer_size = self.das[0] & 0x00FFFF;
       let transfer_size = if transfer_size == 0 { 0x10000 } else { transfer_size };
 
       // do_transfer M: 00CD35, P: 002118, S: 10000
+      let increment_weight = if (self.dmap[0] & 0x08) != 0 { 0 } else { 1 };
       for i in 0..transfer_size {
+        // println!("DMA {:06X} T:{:04X}", memory_addr, transfer_size);
         let v = self.mem_read(memory_addr);
         self.mem_write(if (i % 2) == 0 { ppu_addr } else { ppu_addr + 1 }, v);
-        memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + 1) & 0x00FFFF);
+        memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
       }
     }
   }

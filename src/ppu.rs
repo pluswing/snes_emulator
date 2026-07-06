@@ -209,7 +209,7 @@ impl PPU {
     // 1-0 アドレスインクリメント ステップ (0..3 = ワード アドレスを 1、32、128、128 ずつインクリメント)
     // let timing = (self.vmain & 0x80) >> 7;
     // let address_transfer = (self.vmain & 0x0C) >> 2;
-    let step = (self.vmain & 0x03);
+    let step = self.vmain & 0x03;
     self.vmadd += match step {
       0 => 1,
       1 => 32,
@@ -219,7 +219,7 @@ impl PPU {
   }
 
   fn write_vmdatal(&mut self, data: u8) {
-    let vmadd = (self.vmadd & 0x7F) as usize;
+    let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_lsb(self.vmdata[vmadd], data);
     println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 0 {
@@ -228,7 +228,7 @@ impl PPU {
   }
 
   fn write_vmdatah(&mut self, data: u8) {
-    let vmadd = (self.vmadd & 0x7F) as usize;
+    let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_msb(self.vmdata[vmadd], data);
     println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 1 {
