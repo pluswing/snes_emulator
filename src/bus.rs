@@ -33,6 +33,13 @@ pub struct Bus {
   */
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
+enum DMADrection {
+  CPU_TO_PPU,
+  PPU_TO_CPU,
+}
+
 impl Bus {
   pub fn new(ppu: PPU, cartridge: Cartridge) -> Self {
     Self {
@@ -54,53 +61,79 @@ impl Bus {
   }
 
   fn write_dma_registers(&mut self, addr: u16, data: u8) {
-    // 43x0h RW - DMAPx   - DMA設定レジスタ
-    // ~
-    // 43xFh RW - MIRRx   - 43xBhのミラー (R/W)
     match addr {
       0x420B => {
         // DMA有効
         self.mdmean = data;
         self.do_transfer();
       }
-      0x4300 => {
-        // 転送設定
-        self.dmap[0] = data; // 0x09 = 00001001
+      _ => {
+        // 43x0h RW - DMAPx   - DMA設定レジスタ
+        // ~
+        // 43xFh RW - MIRRx   - 43xBhのミラー (R/W)
+        let register = addr & 0x000F;
+        let channel = ((addr & 0x00F0) >> 4) as usize;
+        match register {
+          // 転送設定
+          0 => self.dmap[channel] = data,
+          // PPU アドレス (to)
+          1 => self.bbad[channel] = data,
+          // Memory アドレス (from)
+          2 => self.a1[channel] = (self.a1[channel] & 0xFFFF00) | (data as u32),
+          3 => self.a1[channel] = (self.a1[channel] & 0xFF00FF) | ((data as u32) << 8),
+          4 => self.a1[channel] = (self.a1[channel] & 0x00FFFF) | ((data as u32) << 16),
+          // 転送サイズ
+          5 => self.das[channel] = (self.das[channel] & 0xFFFF00) | (data as u32),
+          6 => self.das[channel] = (self.das[channel] & 0xFF00FF) | ((data as u32) << 8),
+          7 => self.das[channel] = (self.das[channel] & 0x00FFFF) | ((data as u32) << 16),
+          _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
+        }
       }
-      // PPU アドレス (to)
-      0x4301 => self.bbad[0] = data,
-      // Memory アドレス (from)
-      0x4302 => self.a1[0] = (self.a1[0] & 0xFFFF00) | (data as u32),
-      0x4303 => self.a1[0] = (self.a1[0] & 0xFF00FF) | ((data as u32) << 8),
-      0x4304 => self.a1[0] = (self.a1[0] & 0x00FFFF) | ((data as u32) << 16),
-      // 転送サイズ
-      0x4305 => self.das[0] = (self.das[0] & 0xFFFF00) | (data as u32),
-      0x4306 => self.das[0] = (self.das[0] & 0xFF00FF) | ((data as u32) << 8),
-      0x4307 => self.das[0] = (self.das[0] & 0x00FFFF) | ((data as u32) << 16),
-      _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
     }
   }
 
   fn do_transfer(&mut self) {
-    if self.mdmean & 0x01 != 0 {
-      // DMAチャネル0が有効 => 転送する！
+    for channel in 0..=7 {
+      if self.mdmean & (0x01 << channel) == 0 {
+        continue;
+      }
+      let channel = channel as usize;
 
-      // CPUメモリから読み込み、PPUレジスタ
-      // 1バイトごとにDMAアドレスがインクリメント
-      // DMAアドレスは固定されない
-      // 2レジスタ1書き込み	2 バイト: p, p+1
-      let mut memory_addr = self.a1[0];
-      let ppu_addr = 0x002100 | (self.bbad[0] as u32); // $00:2100 ～ $00:21ff
-      let transfer_size = self.das[0] & 0x00FFFF;
+      let mut memory_addr = self.a1[channel] as i64;
+      let ppu_addr = 0x002100 | (self.bbad[channel] as u32);
+      let transfer_size = self.das[channel] & 0x00FFFF;
       let transfer_size = if transfer_size == 0 { 0x10000 } else { transfer_size };
 
-      // do_transfer M: 00CD35, P: 002118, S: 10000
-      let increment_weight = if (self.dmap[0] & 0x08) != 0 { 0 } else { 1 };
-      for i in 0..transfer_size {
-        // println!("DMA {:06X} T:{:04X}", memory_addr, transfer_size);
-        let v = self.mem_read(memory_addr);
-        self.mem_write(if (i % 2) == 0 { ppu_addr } else { ppu_addr + 1 }, v);
-        memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
+      let increment_direction: i64 = if (self.dmap[channel] & 0x10) == 0 { 1 } else { -1 };
+      let increment_weight: i64 = if (self.dmap[channel] & 0x08) == 0 { increment_direction } else { 0 };
+      let direction = if (self.dmap[channel] & 0x80) == 0 {
+        DMADrection::CPU_TO_PPU
+      } else {
+        DMADrection::PPU_TO_CPU
+      };
+      let mode = self.dmap[channel] & 0x07;
+
+      match mode {
+        0b001	=> {
+          // 2レジスタ1書き込み
+          for i in 0..transfer_size {
+            if direction == DMADrection::CPU_TO_PPU {
+              let v = self.mem_read(memory_addr as u32);
+              self.mem_write(if (i % 2) == 0 { ppu_addr } else { ppu_addr + 1 }, v);
+              memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
+            } else {
+              panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
+            }
+          }
+        }
+        // 0b000	1レジスタ1書き込み	1 バイト: p
+        // 0b010	1レジスタ2書き込み	2 バイト: p, p
+        // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+        // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
+        // 0b101	2レジスタ2書き込み(交互)	4 バイト: p, p+1, p, p+1
+        // 0b110	1レジスタ2書き込み	2 バイト: p, p
+        // 0b111	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+        _ => panic!("not inplement DMA mode ({})", mode)
       }
     }
   }
