@@ -1,4 +1,5 @@
 use core::panic;
+use std::ops::{Range, RangeInclusive};
 
 fn bgr555_to_rgb888(data: u16) -> [u8; 3] {
   // .BBB BBGG GGGR RRRR
@@ -99,16 +100,15 @@ impl PPU {
     let line_par_cycles = 227;
     if self.cycles > line_par_cycles {
       self.cycles -= line_par_cycles;
-      self.scanline += 1;
-
       if self.scanline <= 224 {
         // HBlank割り込み = 1行描画
+        self.draw_line(self.scanline);
         self.interrupt_hbank();
       }
+      self.scanline += 1;
     }
     if self.scanline > 224 {
       // VBlank割り込み = WAIT
-      self.draw_line(self.scanline);
       self.interrupt_vbank();
       self.frame_updated = true;
     }
@@ -135,10 +135,10 @@ impl PPU {
     self.set_nmi()
   }
 
-  fn bg1tilemaps(&mut self) -> &[u16] {
+  fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
     let base = (((self.bg1sc & 0xFC) as u32) << 8) as usize;
-    let tilemaps = &self.vmdata[base..=(base + 32 * 32)];
-    tilemaps
+    let offset: usize = y as usize / 8;
+    &self.vmdata[base..=(base + 32 * offset)]
   }
 
   fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
@@ -164,35 +164,44 @@ impl PPU {
   }
 
   fn draw_line(&mut self, scanline: u8) {
-    let tilemaps = self.bg1tilemaps().to_vec();
-    // [33] = 0052, 0075, 006E, 006E, 0069, 006E, 0067, 0020, 0074, 0065, 0073
-    for (i, tilemap) in tilemaps.iter().enumerate() {
-      let tx = (i % 32) * 8;
-      let ty = (i / 32) * 8;
-      // tilemap = VHPC CCTT TTTT TTTT
+    // TODO
+    // BG1HOFS = x offset
+    // BG1VOFS = y offset
+    let offset_x: u32 = 0;
+    let offset_y: u32 = 0;
+
+    let ox = offset_x;
+    let oy = offset_y + scanline as u32;
+
+    let tilemaps = self.bg1_tilemaps(oy);
+    let tile_y = oy % 8;
+
+    for (tile_x, tilemap) in tilemaps.iter().enumerate() {
+      if (tile_x as u32 * 8) > ox {
+        continue;
+      }
+      if tile_x as u32 * 8 + ox > 256 {
+        continue;
+      }
+
       let tileindex = tilemap & 0x02FF;
       let palette_select = (tilemap & 0x1C00) >> 10;
 
-      // tileをとって
       let tile = self.bg1tile(tileindex).to_vec();
-      // paletteをとって
-      // ピクセルの色が決まって
       let palette = self.palette(palette_select);
 
-      // かく！
-      for (y, line) in tile.iter().enumerate() {
-        for x in 0..8 {
-          let mask = 0x80 >> x;
-          let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
-          let rgb = palette[palette_index as usize];
-          if ty > 230 {
-            continue;
-          }
-          let base_index = ((ty + y) * 256 + x + tx) * 3;
-          self.screen_state[base_index + 0] = rgb[0];
-          self.screen_state[base_index + 1] = rgb[1];
-          self.screen_state[base_index + 2] = rgb[2];
+      let line = tile[ox as usize % 8];
+      for x in 0..8 {
+        let mask = 0x80 >> x;
+        let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+        let rgb = palette[palette_index as usize];
+        if ty > 230 {
+          continue;
         }
+        let base_index = ((ty + y) * 256 + x + tx) * 3;
+        self.screen_state[base_index + 0] = rgb[0];
+        self.screen_state[base_index + 1] = rgb[1];
+        self.screen_state[base_index + 2] = rgb[2];
       }
     }
   }
