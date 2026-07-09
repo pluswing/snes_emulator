@@ -36,7 +36,7 @@ fn main() {
 
   let mut event_pump = sdl_context.event_pump().unwrap();
 
-  let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
+  let cartridge = Cartridge::new("rom/SNES/TEST/ppubusact.sfc");
   // let mut cartridge = Cartridge::new("rom/SNES/ROM/CHRONO TRIGGER/50/Chrono Trigger (Japan).sfc");
   let mut ppu = PPU::new();
   let mut bus = Bus::new(

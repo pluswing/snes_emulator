@@ -1,7 +1,5 @@
 use core::panic;
 
-use sdl3::libc::PROC_PIDTBSDINFO;
-
 use crate::{cartridge::{self, Cartridge}, ppu::PPU};
 
 pub struct Bus {

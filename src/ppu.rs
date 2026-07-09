@@ -55,6 +55,9 @@ pub struct PPU {
   pub screen_state: Vec<u8>,
 }
 
+const WINDOW_WIDTH: usize = 256;
+const WINDOW_HEIGHT: usize = 256; // 224
+
 impl PPU {
   pub fn new() -> Self {
     Self {
@@ -82,7 +85,7 @@ impl PPU {
       rdnmi: 0x02,
 
       frame_updated: false,
-      screen_state: vec![0; 256 * 256 * 3], // 224
+      screen_state: vec![0; WINDOW_WIDTH * WINDOW_HEIGHT * 3],
     }
   }
 
@@ -138,7 +141,8 @@ impl PPU {
   fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
     let base = (((self.bg1sc & 0xFC) as u32) << 8) as usize;
     let offset: usize = y as usize / 8;
-    &self.vmdata[base..=(base + 32 * offset)]
+    let base = base + 32 * offset;
+    &self.vmdata[base..=base + 32]
   }
 
   fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
@@ -173,14 +177,15 @@ impl PPU {
     let ox = offset_x;
     let oy = offset_y + scanline as u32;
 
-    let tilemaps = self.bg1_tilemaps(oy);
-    let tile_y = oy % 8;
+    let tilemaps = self.bg1_tilemaps(oy).to_vec();
+    let tile_y: usize = oy as usize % 8;
 
-    for (tile_x, tilemap) in tilemaps.iter().enumerate() {
-      if (tile_x as u32 * 8) > ox {
+    let mut draw_x: usize = 0;
+    for (i, tilemap) in tilemaps.iter().enumerate() {
+      if (i as usize * 8) < ox as usize {
         continue;
       }
-      if tile_x as u32 * 8 + ox > 256 {
+      if i as usize * 8 + ox as usize > WINDOW_WIDTH {
         continue;
       }
 
@@ -190,18 +195,22 @@ impl PPU {
       let tile = self.bg1tile(tileindex).to_vec();
       let palette = self.palette(palette_select);
 
-      let line = tile[ox as usize % 8];
+      let line = tile[tile_y];
       for x in 0..8 {
+
+        if draw_x > WINDOW_WIDTH {
+          break;
+        }
+
         let mask = 0x80 >> x;
         let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
         let rgb = palette[palette_index as usize];
-        if ty > 230 {
-          continue;
-        }
-        let base_index = ((ty + y) * 256 + x + tx) * 3;
+
+        let base_index = (scanline as usize * WINDOW_WIDTH + draw_x) * 3;
         self.screen_state[base_index + 0] = rgb[0];
         self.screen_state[base_index + 1] = rgb[1];
         self.screen_state[base_index + 2] = rgb[2];
+        draw_x += 1;
       }
     }
   }
