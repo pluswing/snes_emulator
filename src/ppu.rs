@@ -17,6 +17,10 @@ pub struct PPU {
   scanline: u8,
   // registers
   pub inidisp: u8, // 2100h WO - INIDISP - ディスプレイ制御レジスタ1
+  pub obsel: u8, // 2101h WO - OBSEL   - Object Size and Object Base
+  pub oamaddl: u8, // 2102h WO - OAMADDL - OAMアドレス (下位8bit)
+  pub oamaddh: u8,// 2103h WO - OAMADDH - OAMアドレス (上位1bit)
+  pub oamdata: u8, // 2104h WO - OAMDATA - OAM書き込み
   pub bgmode: u8, // 2105h WO - BGMODE  - BG制御レジスタ
   pub mosaic: u8, // 2106h WO - MOSAIC  - モザイク
   pub bg1sc: u8, // 2107h WO - BG1SC   - BG1画面設定
@@ -63,7 +67,12 @@ impl PPU {
     Self {
       cycles: 0,
       scanline: 0,
+
       inidisp: 0x80,
+      obsel: 0x00,
+      oamaddl: 0x00,
+      oamaddh: 0x00,
+      oamdata: 0x00,
       bgmode: 0x0F,
       mosaic: 0,
       bg1sc: 0,
@@ -265,19 +274,27 @@ impl PPU {
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
       0x2100 => self.inidisp = data,
+      0x2101 => self.obsel = data,
+      0x2102 => self.oamaddl = data,
+      0x2103 => self.oamaddh = data,
+      0x2104 => self.oamdata = data,
       0x2105 => {
         println!("BGMODE: {:02X}", data);
         self.bgmode = data
       },
       0x2106 => self.mosaic = data,
       0x2107 => self.bg1sc = data,
+      0x2108..=0x210A => {} // FIXME
       0x210B => self.bg12nba = data, // 04 => BG1 4 x 0x2000 ?
+      0x210C => {}, // FIXME
       0x210D => {
         println!("BG1HOFS: {:02X}", data);
         self.bg1hofs = data
       }
       0x210E => self.bg1vofs = data,
+      0x210F..=0x2114 => {}, // FIXME
       0x2115 => self.vmain = data,
+      0x211A..=0x2120 => {}, // FIXME
       0x2121 => {
         self.cgadd = data;
         self.cg_write_low = true;
@@ -288,15 +305,18 @@ impl PPU {
           self.cgdata[self.cgadd as usize] = self.replace_lsb(self.cgdata[self.cgadd as usize], data);
         } else {
           self.cgdata[self.cgadd as usize] = self.replace_msb(self.cgdata[self.cgadd as usize], data);
-          self.cgadd += 1;
+          self.cgadd = self.cgadd.wrapping_add(1);
         }
         self.cg_write_low = !self.cg_write_low;
       },
+      0x2123..=0x0212B => {},
       0x212C => self.tm = data,
       0x212D => self.ts = data,
       0x212E => self.tmw = data,
+      0x212F => {} // FIXME
       0x2130 => self.cgwsel = data,
       0x2131 => self.cgadsub = data,
+      0x2132 => {} // FIXME
       0x2133 => self.setini = data,
       0x2116 => {
         self.vmadd = self.replace_lsb(self.vmadd, data);

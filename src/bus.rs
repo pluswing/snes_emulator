@@ -124,14 +124,28 @@ impl Bus {
             }
           }
         }
+        0b010 => {
+          // panic!("DMA MODE2 {:02X} {:04X}", self.dmap[channel], transfer_size);
+          // 0b010	1レジスタ2書き込み	2 バイト: p, p
+          for i in 0..transfer_size {
+            if direction == DMADrection::CPU_TO_PPU {
+              println!("DMA({}) {:06X} {:04X}", i, memory_addr, ppu_addr);
+              let v = self.mem_read(memory_addr as u32);
+              self.mem_write(ppu_addr, v);
+              memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
+            } else {
+              panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
+            }
+          }
+        }
         // 0b000	1レジスタ1書き込み	1 バイト: p
-        // 0b010	1レジスタ2書き込み	2 バイト: p, p
+
         // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
         // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
         // 0b101	2レジスタ2書き込み(交互)	4 バイト: p, p+1, p, p+1
         // 0b110	1レジスタ2書き込み	2 バイト: p, p
         // 0b111	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
-        _ => panic!("not inplement DMA mode ({})", mode)
+        _ => panic!("not inplement DMA mode ({:03b})", mode)
       }
     }
   }
