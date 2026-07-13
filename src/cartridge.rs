@@ -16,7 +16,7 @@ impl Cartridge {
 
     // title
     // println!("{:02X?}", &rom[0xFFC0..=0xFFD4]);
-    println!("MAPPING MODE: {:02X}, CHIPSET: {:02X}, ROM: {}KB, RAM: {}KB", rom[0xFFD5], rom[0xFFD6], 1 << rom[0xFFD7], 1 << rom[0xFFD8]);
+    println!("MAPPING MODE: {:02X}, CHIPSET: {:02X}, ROM: 1<<{}KB, RAM: 1<<{}KB", rom[0xFFD5], rom[0xFFD6], rom[0xFFD7], rom[0xFFD8]);
     if rom[0xFFDA] == 0x33 {
       // 後期型拡張ヘッダあり
       println!("後期型拡張ヘッダ: {:02X?}", &rom[0xFFB0..=0xFFBF]);

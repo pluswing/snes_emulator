@@ -330,7 +330,6 @@ impl PPU {
     }
   }
 
-
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
       0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ

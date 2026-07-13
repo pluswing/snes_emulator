@@ -10,6 +10,13 @@ pub struct Bus {
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
 
+  // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
+  timeup: u8,
+  // 4212h RO - HVBJOY  - H/VBlankフラグ & 自動Joypadビジーフラグ (R)
+  hvbjoy: u8,
+  // 4213h RO - RDIO    - Joypad Programmable I/O Port (Input)
+  rdio: u8,
+
   // DMA
   mdmean: u8, // 420Bh WO - MDMAEN  - GDMAチャネルレジスタ
   dmap: [u8; 8], // 43x0h RW - DMAPx   - DMA設定レジスタ
@@ -45,6 +52,10 @@ impl Bus {
       ppu,
       cartridge,
       memory: vec![0; 0x100_0000],
+
+      timeup: 0x00,
+      hvbjoy: 0x00,
+      rdio: 0x00,
 
       mdmean: 0x00,
       dmap: [0xFF; 8],
@@ -174,10 +185,13 @@ impl Mem for Bus {
             self.ppu.read(addr)
           }
           0x4211 => {
-            // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
-            0x80 // TODO
+            let v = self.timeup;
+            self.timeup = 0x00;
+            v
           }
-          0x4212..=0x421F => {
+          0x4212 => self.hvbjoy,
+          0x4213 => self.rdio,
+          0x4214..=0x421F => {
             println!("mem_read({:02X}:{:04X})", bank, addr);
             0
           }
