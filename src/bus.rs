@@ -185,11 +185,14 @@ impl Mem for Bus {
             self.ppu.read(addr)
           }
           0x4211 => {
+            // HIRQ, VIRQ, HVIRQのフラグになっている。
             let v = self.timeup;
             self.timeup = 0x00;
             v
           }
-          0x4212 => self.hvbjoy,
+          0x4212 => {
+            self.hvbjoy
+          }
           0x4213 => self.rdio,
           0x4214..=0x421F => {
             println!("mem_read({:02X}:{:04X})", bank, addr);

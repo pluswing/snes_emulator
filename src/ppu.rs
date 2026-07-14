@@ -57,6 +57,9 @@ pub struct PPU {
   // flags
   pub frame_updated: bool,
   pub screen_state: Vec<u8>,
+
+  pub hblank_flag: bool,
+  pub vblank_flag: bool,
 }
 
 const WINDOW_WIDTH: usize = 256;
@@ -95,6 +98,9 @@ impl PPU {
 
       frame_updated: false,
       screen_state: vec![0; WINDOW_WIDTH * WINDOW_HEIGHT * 3],
+
+      hblank_flag: false,
+      vblank_flag: false,
     }
   }
 
@@ -137,14 +143,19 @@ impl PPU {
 
   fn clear_nmi(&mut self) {
     self.rdnmi = self.rdnmi & 0x0F;
+    self.vblank_flag = false;
   }
 
   fn interrupt_hbank(&mut self) {
-
+    // H-Blank フラグ H-Blank中はセットされている。H-Blankの外ではクリアされる。 セットされるタイミングは、Hカウンタが 0x121 ～ 0x122 (289 ～ 290) の時で、 クリアされるタイミングは、Hカウンタが 0x12 ～ 0x18 (18 ～ 24) の時。
+    // H カウンタは 0 ～ 339
+    self.hblank_flag = true;
   }
 
   fn interrupt_vbank(&mut self) {
-    self.set_nmi()
+    self.set_nmi();
+    // V-Blank フラグ V-Blank中はセットされている。V-Blankの外ではクリアされる。 セットされるタイミングは、Vカウンタが 0xE1(225) かつ Hカウンタが 0x16 ～ 0x17 (22 ～ 23) の時で、 クリアされるタイミングは、Vカウンタが 0 かつ Hカウンタが 0x1E (30) の時。
+    self.vblank_flag = true;
   }
 
   fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
