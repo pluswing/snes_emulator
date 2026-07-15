@@ -110,6 +110,40 @@ const FLAG_CARRY: u8 = 1 << 0;
 pub const MODE_16BIT: u8 = 0;
 const MODE_8BIT: u8 = 1;
 
+#[repr(u8)]
+enum MemorySpeed {
+  Fast = 6,
+  Slow = 8,
+  XSlow = 12
+}
+
+fn memory_speed(addr: u32) -> MemorySpeed {
+  // $00-$3F	$0000-$1FFF	Slow	アドレスバス A ＋ /WRAM (ミラー : $7E:0000-$1FFF)
+  // $2000-$20FF	Fast	アドレスバス A
+  // $2100-$21FF	Fast	アドレスバス B
+  // $2200-$3FFF	Fast	アドレスバス A
+  // $4000-$41FF	XSlow	内部CPUレジスタ (注 1 参照)
+  // $4200-$43FF	Fast	内部CPUレジスタ (注 1 参照)
+  // $4400-$5FFF	Fast	アドレスバス A
+  // $6000-$7FFF	Slow	アドレスバス A
+  // $8000-$FFFF	Slow	アドレスバス A + /CART
+  // $40-$7D	$0000-$FFFF	Slow	アドレスバス A + /CART
+  // $7E-$7F	$0000-$FFFF	Slow	アドレスバス A ＋ /WRAM
+  // $80-$BF	$0000-$1FFF	Slow	アドレスバス A ＋ /WRAM (ミラー : $7E:0000-$1FFF)
+  // $2000-$20FF	Fast	アドレスバス A
+  // $2100-$21FF	Fast	アドレスバス B
+  // $2200-$3FFF	Fast	アドレスバス A
+  // $4000-$41FF	XSlow	内部CPUレジスタ (注 1 参照)
+  // $4200-$43FF	Fast	内部CPUレジスタ (注 1 参照)
+  // $4400-$5FFF	Fast	アドレスバス A
+  // $6000-$7FFF	Slow	アドレスバス A
+  // $8000-$FFFF	注 2	アドレスバス A + /CART
+  // $C0-$FF	$0000-$FFFF	注 2	アドレスバス A + /CART
+
+  // FIXME
+  MemorySpeed::Fast
+}
+
 pub struct CPU {
     pub register_a: u16, // u8モードの時もあり。
     pub register_x: u16,
@@ -560,6 +594,15 @@ impl CPU {
 
                 // println!("{:06X} {}", pc, op.name);
 
+                let bytes = if self.is_native_mode() { op.native.bytes } else { op.emulation.bytes };
+                let cycles = if self.is_native_mode() { op.native.cycles } else { op.emulation.cycles };
+                let speed = if bytes == 1 {
+                  MemorySpeed::Fast
+                } else {
+                  let addr = self.get_operand_address(&op.addressing_mode);
+                  memory_speed(addr)
+                };
+
                 call(self, &op);
 
                 // self.bus.tick(op.cycles + self.add_cycles);
@@ -567,7 +610,7 @@ impl CPU {
                 // if program_conter_state == self.program_counter {
                 //   self.program_counter += (op.len - 1) as u16
                 // }
-                self.bus.tick(if self.is_native_mode() { op.native.cycles } else { op.emulation.cycles })
+                self.bus.tick( cycles * speed as u8)
             }
             _ => {} // panic!("no implementation {:<02X}", opscode),
         }

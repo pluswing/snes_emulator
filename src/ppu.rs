@@ -14,7 +14,6 @@ fn bgr555_to_rgb888(data: u16) -> [u8; 3] {
 
 pub struct PPU {
   cycles: u32,
-  scanline: u8,
   // registers
   pub inidisp: u8, // 2100h WO - INIDISP - ディスプレイ制御レジスタ1
   pub obsel: u8, // 2101h WO - OBSEL   - Object Size and Object Base
@@ -58,6 +57,9 @@ pub struct PPU {
   pub frame_updated: bool,
   pub screen_state: Vec<u8>,
 
+  pub h_counter: u16,
+  pub v_counter: u16,
+
   pub hblank_flag: bool,
   pub vblank_flag: bool,
 }
@@ -69,7 +71,6 @@ impl PPU {
   pub fn new() -> Self {
     Self {
       cycles: 0,
-      scanline: 0,
 
       inidisp: 0x80,
       obsel: 0x00,
@@ -99,6 +100,9 @@ impl PPU {
       frame_updated: false,
       screen_state: vec![0; WINDOW_WIDTH * WINDOW_HEIGHT * 3],
 
+      h_counter: 0,
+      v_counter: 0,
+
       hblank_flag: false,
       vblank_flag: false,
     }
@@ -112,27 +116,31 @@ impl PPU {
   // スキャンライン$E1(225: NTSC)または$F0(PAL: 240)からフレームの終わりまで実行されます。
   // 各スキャンラインの開始から約536サイクル後から40サイクルの間一時停止します。
   // 1スキャンラインあたり常に340ドット（ピクセル）??
+  // 22 ～ 277 が画面に表示される。
+  // Vカウンタは、NTSC モードでは 0 ～ 261
+  //   1 ～ 224 の範囲が画面に表示される。
   pub fn tick(&mut self, cycles: u8) {
     self.cycles += cycles as u32;
 
-    let line_par_cycles = 227;
+    let line_par_cycles = 1364;
+    self.h_counter = (self.cycles / 4) as u16;
+
+    if self.h_counter > 277 && self.v_counter <= 224 {
+      self.draw_line(self.v_counter);
+    }
+
     if self.cycles > line_par_cycles {
       self.cycles -= line_par_cycles;
-      if self.scanline <= 224 {
-        // HBlank割り込み = 1行描画
-        self.draw_line(self.scanline);
-        self.interrupt_hbank();
-      }
-      self.scanline += 1;
+      self.v_counter += 1;
     }
-    if self.scanline > 224 {
+    if self.v_counter > 224 {
       // VBlank割り込み = WAIT
       self.interrupt_vbank();
       self.frame_updated = true;
     }
-    if self.scanline > 234 {
+    if self.v_counter > 261 {
       // FIXME
-      self.scanline = 0;
+      self.v_counter = 0;
       self.clear_nmi();
     }
   }
@@ -187,7 +195,7 @@ impl PPU {
     res
   }
 
-  fn draw_line(&mut self, scanline: u8) {
+  fn draw_line(&mut self, scanline: u16) {
     // TODO
     // BG1HOFS = x offset
     // BG1VOFS = y offset
