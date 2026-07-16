@@ -2,10 +2,48 @@ use core::panic;
 
 use crate::{cartridge::{self, Cartridge}, ppu::PPU};
 
+#[repr(u8)]
+enum MemorySpeed {
+  Fast = 6,
+  Slow = 8,
+  XSlow = 12
+}
+
+fn memory_speed(bank: u8, addr: u16) -> MemorySpeed {
+  match bank {
+    0x00..=0x3F => {
+      match addr {
+        0x0000..=0x1FFF => MemorySpeed::Slow,
+        0x2000..=0x3FFF => MemorySpeed::Fast,
+        0x4000..=0x41FF => MemorySpeed::XSlow,
+        0x4200..=0x5FFF => MemorySpeed::Fast,
+        0x6000..=0xFFFF => MemorySpeed::Slow,
+      }
+    }
+    0x40..=0x7F => {
+      MemorySpeed::Slow
+    }
+    0x80..=0xBF => {
+      match addr {
+        0x0000..=0x1FFF => MemorySpeed::Slow,
+        0x2000..=0x3FFF => MemorySpeed::Fast,
+        0x4000..=0x41FF => MemorySpeed::XSlow,
+        0x4200..=0x5FFF => MemorySpeed::Fast,
+        0x6000..=0x7FFF => MemorySpeed::Slow,
+        // 注2 CPU レジスタ 0x420D のビット 0 がセットされている時、 スピードは Fast になり、セットされていない場合は Slow になる。
+        0x8000..=0xFFFF => MemorySpeed::Slow // FIXME 注2
+      }
+    }
+    0xC0..=0xFF => MemorySpeed::Slow // FIXME 注2
+  }
+}
+
+
 pub struct Bus {
   wram: Vec<u8>,
   pub ppu: PPU,
   cartridge: Cartridge,
+  pub cycles: u8,
 
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
@@ -51,6 +89,7 @@ impl Bus {
       wram: vec![0; 0x1_0000 * 2],
       ppu,
       cartridge,
+      cycles: 0,
       memory: vec![0; 0x100_0000],
 
       timeup: 0x00,
@@ -65,8 +104,9 @@ impl Bus {
     }
   }
 
-  pub fn tick(&mut self, cycles: u8) {
-    self.ppu.tick(cycles);
+  pub fn tick(&mut self) {
+    self.ppu.tick(self.cycles);
+    self.cycles = 0;
   }
 
   fn write_dma_registers(&mut self, addr: u16, data: u8) {
@@ -160,7 +200,6 @@ impl Bus {
       }
     }
   }
-
 }
 
 pub trait Mem {
@@ -175,6 +214,9 @@ impl Mem for Bus {
   fn mem_read(&mut self, addr: u32) -> u8 {
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
+
+    self.cycles += memory_speed(bank, addr) as u8;
+
     match bank {
       0x00..=0x3F => {
         match addr {
@@ -229,6 +271,9 @@ impl Mem for Bus {
   fn mem_write(&mut self, addr: u32, data: u8) {
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
+
+    self.cycles += memory_speed(bank, addr) as u8;
+
     match bank {
     0x00..=0x3F => {
         match addr {
