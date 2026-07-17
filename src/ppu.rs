@@ -52,16 +52,20 @@ pub struct PPU {
 
   // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
   rdnmi: u8,
+  // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
+  timeup: u8,
+
 
   // flags
   pub frame_updated: bool,
   pub screen_state: Vec<u8>,
 
-  pub h_counter: u16,
-  pub v_counter: u16,
+  h_counter: u16,
+  v_counter: u16,
 
-  pub hblank_flag: bool,
-  pub vblank_flag: bool,
+  hblank_flag: bool,
+  vblank_flag: bool,
+  auto_joypad_flag: bool,
 }
 
 const WINDOW_WIDTH: usize = 256;
@@ -96,6 +100,7 @@ impl PPU {
       vmadd: 0,
       vmdata: vec![0; 32 * 1024], // 32K Word
       rdnmi: 0x02,
+      timeup: 0x00,
 
       frame_updated: false,
       screen_state: vec![0; WINDOW_WIDTH * WINDOW_HEIGHT * 3],
@@ -105,6 +110,7 @@ impl PPU {
 
       hblank_flag: false,
       vblank_flag: false,
+      auto_joypad_flag: false,
     }
   }
 
@@ -125,23 +131,52 @@ impl PPU {
     let line_par_cycles = 1364;
     self.h_counter = (self.cycles / 4) as u16;
 
-    if self.h_counter > 277 && self.v_counter <= 224 {
-      self.draw_line(self.v_counter);
-    }
-
     if self.cycles > line_par_cycles {
       self.cycles -= line_par_cycles;
       self.v_counter += 1;
     }
+
+    // FIXME 最終的には、draw_pixel()を作って、1ピクセルづつ書くようにする。
+    if self.h_counter > 277 && self.v_counter <= 224 {
+      self.draw_line(self.v_counter);
+    }
+
+    // H-Blank フラグ H-Blank中はセットされている。H-Blankの外ではクリアされる。
+    // セットされるタイミングは、Hカウンタが 0x121 ～ 0x122 (289 ～ 290) の時で、
+    // クリアされるタイミングは、Hカウンタが 0x12 ～ 0x18 (18 ～ 24) の時。
+    if !self.hblank_flag && self.h_counter >= 289 {
+      self.hblank_flag = true;
+    }
+    if self.hblank_flag && self.h_counter >= 18 {
+      self.hblank_flag = false;
+    }
+
     if self.v_counter > 224 {
-      // VBlank割り込み = WAIT
-      self.interrupt_vbank();
+      self.set_nmi();
       self.frame_updated = true;
     }
+
     if self.v_counter > 261 {
-      // FIXME
       self.v_counter = 0;
       self.clear_nmi();
+    }
+
+    // V-Blank フラグ V-Blank中はセットされている。
+    // V-Blankの外ではクリアされる。
+    // セットされるタイミングは、Vカウンタが 0xE1(225) かつ Hカウンタが 0x16 ～ 0x17 (22 ～ 23) の時で、
+    // クリアされるタイミングは、Vカウンタが 0 かつ Hカウンタが 0x1E (30) の時。
+    if !self.vblank_flag && self.v_counter >= 255 && self.h_counter >= 22 {
+      self.vblank_flag = true;
+      self.auto_joypad_flag = true;
+    }
+    if self.vblank_flag && self.v_counter >= 0 && self.h_counter >= 30 {
+      self.vblank_flag = false;
+    }
+
+    // 自動ジョイパッドステータス 自動ジョイパッド読み込み時にセットされる。 完了時にクリアされる。
+    // 典型的に、これは V-Blank 開始時にセットされ、 3 スキャンライン後に完了する。
+    if self.auto_joypad_flag && self.v_counter >= 255 + 3 {
+      self.auto_joypad_flag = false;
     }
   }
 
@@ -152,18 +187,6 @@ impl PPU {
   fn clear_nmi(&mut self) {
     self.rdnmi = self.rdnmi & 0x0F;
     self.vblank_flag = false;
-  }
-
-  fn interrupt_hbank(&mut self) {
-    // H-Blank フラグ H-Blank中はセットされている。H-Blankの外ではクリアされる。 セットされるタイミングは、Hカウンタが 0x121 ～ 0x122 (289 ～ 290) の時で、 クリアされるタイミングは、Hカウンタが 0x12 ～ 0x18 (18 ～ 24) の時。
-    // H カウンタは 0 ～ 339
-    self.hblank_flag = true;
-  }
-
-  fn interrupt_vbank(&mut self) {
-    self.set_nmi();
-    // V-Blank フラグ V-Blank中はセットされている。V-Blankの外ではクリアされる。 セットされるタイミングは、Vカウンタが 0xE1(225) かつ Hカウンタが 0x16 ～ 0x17 (22 ～ 23) の時で、 クリアされるタイミングは、Vカウンタが 0 かつ Hカウンタが 0x1E (30) の時。
-    self.vblank_flag = true;
   }
 
   fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
@@ -362,6 +385,15 @@ impl PPU {
         let res = self.rdnmi;
         self.clear_nmi();
         res
+      }
+      0x4211 => {
+        // HIRQ, VIRQ, HVIRQのフラグになっている。
+        0
+      }
+      0x4212 => {
+        (if self.vblank_flag { 0x80 } else { 0x00 })
+        | (if self.hblank_flag { 0x40 } else { 0x00 })
+        | (if self.auto_joypad_flag { 0x01 } else { 0x00 })
       }
       _ => panic!("not implement PPU::read({:04X})", addr),
     }

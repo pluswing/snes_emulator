@@ -48,10 +48,6 @@ pub struct Bus {
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
 
-  // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
-  timeup: u8,
-  // 4212h RO - HVBJOY  - H/VBlankフラグ & 自動Joypadビジーフラグ (R)
-  hvbjoy: u8,
   // 4213h RO - RDIO    - Joypad Programmable I/O Port (Input)
   rdio: u8,
 
@@ -222,18 +218,8 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
-          0x4210 => {
-            // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
+          0x4210..=0x4212 => {
             self.ppu.read(addr)
-          }
-          0x4211 => {
-            // HIRQ, VIRQ, HVIRQのフラグになっている。
-            let v = self.timeup;
-            self.timeup = 0x00;
-            v
-          }
-          0x4212 => {
-            self.hvbjoy
           }
           0x4213 => self.rdio,
           0x4214..=0x421F => {
