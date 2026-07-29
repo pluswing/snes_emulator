@@ -48,8 +48,16 @@ pub struct PPU {
   // 2119h WO - VMDATAH - VRAMデータ書き込み (上位8bit)
   vmdata: Vec<u16>,
   // 213Ch RO - OPHCT   - Hカウンタ
+  ophct: u16,
+  ophct_low: bool,
   // 213Dh RO - OPVCT   - Vカウンタ
+  opvct: u16,
+  opvct_low: bool,
+  stat77: u8, // 213Eh RO - STAT77  - PPU1ステータス
+  stat78: u8, // 213Fh RO - STAT78  - PPU2ステータス
 
+  // 4201h WO - WRIO    - Joypad Programmable I/O Port (Open-Collector Output)
+  wrio: u8,
   // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
   rdnmi: u8,
   // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
@@ -99,6 +107,14 @@ impl PPU {
       setini: 0,
       vmadd: 0,
       vmdata: vec![0; 32 * 1024], // 32K Word
+      ophct: 0x01FF,
+      ophct_low: true,
+      opvct: 0x01FF,
+      opvct_low: true,
+      stat77: 0x00,
+      stat78: 0x00,
+
+      wrio: 0xFF,
       rdnmi: 0x02,
       timeup: 0x00,
 
@@ -125,8 +141,8 @@ impl PPU {
   // 22 ～ 277 が画面に表示される。
   // Vカウンタは、NTSC モードでは 0 ～ 261
   //   1 ～ 224 の範囲が画面に表示される。
-  pub fn tick(&mut self, cycles: u8) {
-    self.cycles += cycles as u32;
+  pub fn tick(&mut self, cycles: u32) {
+    self.cycles += cycles;
 
     let line_par_cycles = 1364;
     self.h_counter = (self.cycles / 4) as u16;
@@ -368,6 +384,7 @@ impl PPU {
       }
       0x2118 => self.write_vmdatal(data),
       0x2119 => self.write_vmdatah(data),
+      0x4201 => self.wrio = data,
       _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
     }
   }
@@ -375,11 +392,35 @@ impl PPU {
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
       0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ
-        // 今書いているx, yの座標をとってきて、
-        // 213Ch RO - OPHCT   - Hカウンタ                       (01FFh)
-        // 213Dh RO - OPVCT   - Vカウンタ                       (01FFh)
-        // にセットする
-        0 // TODO オープンバス
+        if self.wrio & 0x80 != 0 {
+          self.ophct = self.h_counter;
+          self.opvct = self.v_counter;
+        }
+        0 // オープンバス
+      }
+      0x213C => {
+        let val = if self.ophct_low {
+          self.ophct & 0x00FF
+        } else {
+          (self.ophct & 0xFF00) >> 8
+        };
+        self.ophct_low = !self.ophct_low;
+        val as u8
+      }
+      0x213D => {
+        let val = if self.opvct_low {
+          self.opvct & 0x00FF
+        } else {
+          (self.opvct & 0xFF00) >> 8
+        };
+        self.opvct_low = !self.opvct_low;
+        val as u8
+      }
+      0x213E => {
+        self.stat77
+      }
+      0x213F => {
+        self.stat78
       }
       0x4210 => {
         let res = self.rdnmi;

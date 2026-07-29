@@ -43,7 +43,7 @@ pub struct Bus {
   wram: Vec<u8>,
   pub ppu: PPU,
   cartridge: Cartridge,
-  pub cycles: u8,
+  pub cycles: u32,
 
   // FIXME とりあえず
   pub memory: Vec<u8>, // size=0xFFFFFF
@@ -88,8 +88,6 @@ impl Bus {
       cycles: 0,
       memory: vec![0; 0x100_0000],
 
-      timeup: 0x00,
-      hvbjoy: 0x00,
       rdio: 0x00,
 
       mdmean: 0x00,
@@ -211,7 +209,7 @@ impl Mem for Bus {
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
 
-    self.cycles += memory_speed(bank, addr) as u8;
+    self.cycles += memory_speed(bank, addr) as u32;
 
     match bank {
       0x00..=0x3F => {
@@ -226,9 +224,6 @@ impl Mem for Bus {
             println!("mem_read({:02X}:{:04X})", bank, addr);
             0
           }
-          // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
-          // ~
-          // 421Fh RO - JOY4H   - Joypad4レジスタ (上位8bit)
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -258,7 +253,7 @@ impl Mem for Bus {
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
 
-    self.cycles += memory_speed(bank, addr) as u8;
+    self.cycles += memory_speed(bank, addr) as u32;
 
     match bank {
     0x00..=0x3F => {
@@ -268,6 +263,7 @@ impl Mem for Bus {
           0x420B => {
             self.write_dma_registers(addr, data);
           },
+          0x4201 => self.ppu.write(addr, data),
           0x4200..=0x420D => {
             // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
             // ~
