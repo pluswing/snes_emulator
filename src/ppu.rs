@@ -56,12 +56,25 @@ pub struct PPU {
   stat77: u8, // 213Eh RO - STAT77  - PPU1ステータス
   stat78: u8, // 213Fh RO - STAT78  - PPU2ステータス
 
+  // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
+  nmitimen: u8,
+
   // 4201h WO - WRIO    - Joypad Programmable I/O Port (Open-Collector Output)
   wrio: u8,
+
+  // 4207h WO - HTIMEL  - HIRQ座標 (下位8bits)                          (FFh)
+  htimel: u8,
+  // 4208h WO - HTIMEH  - HIRQ座標 (上位1bit)                           (01h)
+  htimeh: u8,
+  // 4209h WO - VTIMEL  - VIRQ座標 (下位8bits)                          (FFh)
+  vtimel: u8,
+  // 420Ah WO - VTIMEH  - VIRQ座標 (上位1bit)                           (01h)
+  vtimeh: u8,
+
   // 4210h RO - RDNMI   - NMIフラグ (Read/Ack)
   rdnmi: u8,
   // 4211h RO - TIMEUP  - H/VタイマーIRQフラグ
-  timeup: u8,
+  pub timeup: u8,
 
 
   // flags
@@ -74,6 +87,9 @@ pub struct PPU {
   hblank_flag: bool,
   vblank_flag: bool,
   auto_joypad_flag: bool,
+
+  pub hirq_flag: bool,
+  pub virq_flag: bool,
 }
 
 const WINDOW_WIDTH: usize = 256;
@@ -114,7 +130,12 @@ impl PPU {
       stat77: 0x00,
       stat78: 0x00,
 
+      nmitimen: 0x00,
       wrio: 0xFF,
+      htimel: 0xFF,
+      htimeh: 0x01,
+      vtimel: 0xFF,
+      vtimeh: 0x01,
       rdnmi: 0x02,
       timeup: 0x00,
 
@@ -127,6 +148,9 @@ impl PPU {
       hblank_flag: false,
       vblank_flag: false,
       auto_joypad_flag: false,
+
+      hirq_flag: false,
+      virq_flag: false,
     }
   }
 
@@ -150,6 +174,31 @@ impl PPU {
     if self.cycles > line_par_cycles {
       self.cycles -= line_par_cycles;
       self.v_counter += 1;
+    }
+
+    // IRQ
+    let hvirq = (self.nmitimen & 0x30) >> 4;
+    if hvirq == 1 {
+      // HIRQ
+      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
+      if htime <= self.h_counter {
+        self.hirq_flag = true;
+      }
+    } else if hvirq == 2 {
+      // VIRQ
+      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
+      if vtime <= self.v_counter {
+        self.virq_flag = true;
+      }
+    } else if hvirq == 3 {
+      // HVIRQ
+      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
+      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
+
+      if htime <= self.h_counter && vtime <= self.v_counter {
+        self.hirq_flag = true;
+        self.virq_flag = true;
+      }
     }
 
     // FIXME 最終的には、draw_pixel()を作って、1ピクセルづつ書くようにする。
