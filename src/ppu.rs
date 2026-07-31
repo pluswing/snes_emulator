@@ -84,12 +84,14 @@ pub struct PPU {
   h_counter: u16,
   v_counter: u16,
 
-  hblank_flag: bool,
+  pub hblank_flag: bool,
   vblank_flag: bool,
   auto_joypad_flag: bool,
 
   pub hirq_flag: bool,
   pub virq_flag: bool,
+  hirq_wait_flag: bool,
+  virq_wait_flag: bool,
 }
 
 const WINDOW_WIDTH: usize = 256;
@@ -151,6 +153,8 @@ impl PPU {
 
       hirq_flag: false,
       virq_flag: false,
+      hirq_wait_flag: false,
+      virq_wait_flag: false,
     }
   }
 
@@ -174,32 +178,10 @@ impl PPU {
     if self.cycles > line_par_cycles {
       self.cycles -= line_par_cycles;
       self.v_counter += 1;
+      self.hirq_wait_flag = true;
     }
 
-    // IRQ
-    let hvirq = (self.nmitimen & 0x30) >> 4;
-    if hvirq == 1 {
-      // HIRQ
-      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
-      if htime <= self.h_counter {
-        self.hirq_flag = true;
-      }
-    } else if hvirq == 2 {
-      // VIRQ
-      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
-      if vtime <= self.v_counter {
-        self.virq_flag = true;
-      }
-    } else if hvirq == 3 {
-      // HVIRQ
-      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
-      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
-
-      if htime <= self.h_counter && vtime <= self.v_counter {
-        self.hirq_flag = true;
-        self.virq_flag = true;
-      }
-    }
+    self.hvirq();
 
     // FIXME 最終的には、draw_pixel()を作って、1ピクセルづつ書くようにする。
     if self.h_counter > 277 && self.v_counter <= 224 {
@@ -223,6 +205,7 @@ impl PPU {
 
     if self.v_counter > 261 {
       self.v_counter = 0;
+      self.virq_wait_flag = true;
       self.clear_nmi();
     }
 
@@ -242,6 +225,37 @@ impl PPU {
     // 典型的に、これは V-Blank 開始時にセットされ、 3 スキャンライン後に完了する。
     if self.auto_joypad_flag && self.v_counter >= 255 + 3 {
       self.auto_joypad_flag = false;
+    }
+  }
+
+  fn hvirq(&mut self) {
+    let hvirq = (self.nmitimen & 0x30) >> 4;
+    if hvirq == 1 {
+      // HIRQ
+      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
+      if htime <= self.h_counter && self.hirq_wait_flag {
+        self.hirq_flag = true;
+        self.hirq_wait_flag = false;
+      }
+    } else if hvirq == 2 {
+      // VIRQ
+      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
+      if vtime <= self.v_counter && self.virq_wait_flag {
+        self.virq_flag = true;
+        self.virq_wait_flag = false;
+      }
+    } else if hvirq == 3 {
+      // HVIRQ
+      let htime = ((self.htimeh as u16) << 8) | self.htimel as u16;
+      let vtime = ((self.vtimeh as u16) << 8) | self.vtimel as u16;
+
+      if htime <= self.h_counter && vtime <= self.v_counter && self.hirq_wait_flag && self.virq_wait_flag {
+        self.hirq_flag = true;
+        self.virq_flag = true;
+
+        self.hirq_wait_flag = false;
+        self.virq_wait_flag = false;
+      }
     }
   }
 
@@ -391,17 +405,17 @@ impl PPU {
       },
       0x2106 => self.mosaic = data,
       0x2107 => self.bg1sc = data,
-      0x2108..=0x210A => {} // FIXME
+      0x2108..=0x210A => {} // FIXME BG画面設定
       0x210B => self.bg12nba = data, // 04 => BG1 4 x 0x2000 ?
-      0x210C => {}, // FIXME
+      0x210C => {}, // FIXME BG3,4タイルデータアドレス
       0x210D => {
         println!("BG1HOFS: {:02X}", data);
         self.bg1hofs = data
       }
       0x210E => self.bg1vofs = data,
-      0x210F..=0x2114 => {}, // FIXME
+      0x210F..=0x2114 => {}, // FIXME BG2,3,4Xスクロール
       0x2115 => self.vmain = data,
-      0x211A..=0x2120 => {}, // FIXME
+      0x211A..=0x2120 => {}, // FIXME Mode 7関係
       0x2121 => {
         self.cgadd = data;
         self.cg_write_low = true;
@@ -420,10 +434,10 @@ impl PPU {
       0x212C => self.tm = data,
       0x212D => self.ts = data,
       0x212E => self.tmw = data,
-      0x212F => {} // FIXME
+      0x212F => {} // FIXME Window Area Sub Screen Disable
       0x2130 => self.cgwsel = data,
       0x2131 => self.cgadsub = data,
-      0x2132 => {} // FIXME
+      0x2132 => {} // FIXME Color Math Sub Screen Backdrop Color
       0x2133 => self.setini = data,
       0x2116 => {
         self.vmadd = self.replace_lsb(self.vmadd, data);
@@ -433,6 +447,12 @@ impl PPU {
       }
       0x2118 => self.write_vmdatal(data),
       0x2119 => self.write_vmdatah(data),
+      0x4200 => {
+        self.nmitimen = data;
+        if (self.nmitimen & 0x30) == 0 {
+          self.timeup = self.timeup & 0x7F;
+        }
+      }
       0x4201 => self.wrio = data,
       _ => panic!("not implement PPU::write({:04X}, {:02X})", addr, data),
     }
@@ -477,8 +497,9 @@ impl PPU {
         res
       }
       0x4211 => {
-        // HIRQ, VIRQ, HVIRQのフラグになっている。
-        0
+        let v = self.timeup;
+        self.timeup = self.timeup & 0x7F;
+        v
       }
       0x4212 => {
         (if self.vblank_flag { 0x80 } else { 0x00 })

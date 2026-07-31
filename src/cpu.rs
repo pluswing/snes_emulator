@@ -538,24 +538,7 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
-      if self.bus.ppu.hirq_flag || self.bus.ppu.virq_flag {
-        println!("H/V IRQ");
-        if self.status & FLAG_INTERRRUPT != 0 {
-
-          if self.is_emulation_mode() {
-            self.status = self.status & !FLAG_BREAK;
-          } else {
-            self._push(self.program_bank);
-          }
-          self._push_u16(self.program_counter);
-          self._push(self.status);
-          self.status = self.status & !FLAG_DECIMAL;
-          self.status = self.status | FLAG_INTERRRUPT;
-          self.program_bank = 0x00;
-          self.program_counter = 0xFFEE;
-        }
-        self.bus.ppu.timeup = self.bus.ppu.timeup | 0x80;
-      }
+      self.hvirq();
         // if let Some(_nmi) = self.bus.poll_nmi_status() {
         //     self.interrupt_nmi();
         // }
@@ -583,6 +566,30 @@ impl CPU {
         }
         self.apply_mode(true);
 
+    }
+
+    fn hvirq(&mut self) {
+      if !self.bus.ppu.hirq_flag && !self.bus.ppu.virq_flag {
+        return
+      }
+      println!("H/V IRQ");
+      if self.status & FLAG_INTERRRUPT != 0 {
+
+        if self.is_emulation_mode() {
+          self.status = self.status & !FLAG_BREAK;
+        } else {
+          self._push(self.program_bank);
+        }
+        self._push_u16(self.program_counter);
+        self._push(self.status);
+        self.status = self.status & !FLAG_DECIMAL;
+        self.status = self.status | FLAG_INTERRRUPT;
+        self.program_bank = 0x00;
+        self.program_counter = 0xFFEE;
+        self.bus.ppu.hirq_flag = false;
+        self.bus.ppu.virq_flag = false;
+      }
+      self.bus.ppu.timeup = self.bus.ppu.timeup | 0x80;
     }
 /* ファミコンの割り込み実装。
     fn interrupt_nmi(&mut self) {

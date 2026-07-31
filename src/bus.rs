@@ -100,7 +100,16 @@ impl Bus {
 
   pub fn tick(&mut self) {
     self.ppu.tick(self.cycles);
+    self.hdma();
     self.cycles = 0;
+  }
+
+  fn hdma(&mut self) {
+    if !self.ppu.hblank_flag {
+      return
+    }
+    // 転送処理大体1ちゃんねるあたり4バイト転送。
+    // 次のhblankまでは何もしない。
   }
 
   fn write_dma_registers(&mut self, addr: u16, data: u8) {
@@ -216,9 +225,7 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
-          0x4210..=0x4212 => {
-            self.ppu.read(addr)
-          }
+          0x4210..=0x4212 => self.ppu.read(addr),
           0x4213 => self.rdio,
           0x4214..=0x421F => {
             println!("mem_read({:02X}:{:04X})", bank, addr);
@@ -263,9 +270,8 @@ impl Mem for Bus {
           0x420B => {
             self.write_dma_registers(addr, data);
           },
-          0x4201 => self.ppu.write(addr, data),
-          0x4200..=0x420D => {
-            // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
+          0x4200..=0x4201 => self.ppu.write(addr, data),
+          0x4202..=0x420D => {
             // ~
             // 420Dh WO - MEMSEL  - WS2制御レジスタ
             println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
