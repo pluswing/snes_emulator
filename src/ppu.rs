@@ -85,7 +85,7 @@ pub struct PPU {
   v_counter: u16,
 
   pub hblank_flag: bool,
-  vblank_flag: bool,
+  pub vblank_flag: bool,
   auto_joypad_flag: bool,
 
   pub hirq_flag: bool,

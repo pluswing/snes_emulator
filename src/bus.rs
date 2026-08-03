@@ -51,8 +51,9 @@ pub struct Bus {
   // 4213h RO - RDIO    - Joypad Programmable I/O Port (Input)
   rdio: u8,
 
-  // DMA
+  // DMA / HDMA
   mdmean: u8, // 420Bh WO - MDMAEN  - GDMAチャネルレジスタ
+  hdmean: u8, // 420Ch WO - HDMAEN  - HDMAチャネルレジスタ
   dmap: [u8; 8], // 43x0h RW - DMAPx   - DMA設定レジスタ
   bbad: [u8; 8], // 43x1h RW - BBADx   - DBバスアドレス
   // 43x2h RW - A1TxL   - Aバスアドレス (low)
@@ -63,13 +64,13 @@ pub struct Bus {
   // 43x6h RW - DASxH   - Indirect HDMA Address (high) / DMA Byte-Counter (high)
   // 43x7h RW - DASBx   - Indirect HDMA Address (bank)
   das: [u32; 8],
+  // 43x8h RW - A2AxL   - HDMA Table Current Address (low)
+  // 43x9h RW - A2AxH   - HDMA Table Current Address (high)
+  a2a: [u16; 8],
+  // 43xAh RW - NTRLx   - HDMA Line-Counter (from current Table entry)
+  ntrl: [u8; 8],
 
-  /*
-  43x7h RW - DASBx   - Indirect HDMA Address (bank)                          (FFh)
-  43x8h RW - A2AxL   - HDMA Table Current Address (low)                      (FFh)
-  43x9h RW - A2AxH   - HDMA Table Current Address (high)                     (FFh)
-  43xAh RW - NTRLx   - HDMA Line-Counter (from current Table entry)          (FFh)
-  */
+  transfered_hdma: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,10 +92,15 @@ impl Bus {
       rdio: 0x00,
 
       mdmean: 0x00,
+      hdmean: 0x00,
       dmap: [0xFF; 8],
       bbad: [0xFF; 8],
       a1: [0x00FFFF; 8],
       das: [0xFFFFFF; 8],
+      a2a: [0xFFFF; 8],
+      ntrl: [0xFF; 8],
+
+      transfered_hdma: false,
     }
   }
 
@@ -105,11 +111,31 @@ impl Bus {
   }
 
   fn hdma(&mut self) {
-    if !self.ppu.hblank_flag {
+    if self.hdmean == 0 {
       return
     }
-    // 転送処理大体1ちゃんねるあたり4バイト転送。
-    // 次のhblankまでは何もしない。
+    // Vブランク中はHDMAしない
+    if self.ppu.vblank_flag {
+      return
+    }
+    if !self.ppu.hblank_flag {
+      self.transfered_hdma = false;
+      return
+    }
+    if self.transfered_hdma {
+      return
+    }
+    self.transfered_hdma = true;
+
+    for channel in 0..=7 {
+      if self.hdmean & (0x01 << channel) == 0 {
+        continue;
+      }
+      let channel = channel as usize;
+
+      // TODO 転送処理
+    }
+
   }
 
   fn write_dma_registers(&mut self, addr: u16, data: u8) {
@@ -119,6 +145,10 @@ impl Bus {
         self.mdmean = data;
         self.do_transfer();
       }
+      0x420C => {
+        // HDMA有効
+        self.hdmean = data;
+      }
       _ => {
         // 43x0h RW - DMAPx   - DMA設定レジスタ
         // ~
@@ -127,17 +157,20 @@ impl Bus {
         let channel = ((addr & 0x00F0) >> 4) as usize;
         match register {
           // 転送設定
-          0 => self.dmap[channel] = data,
+          0x00 => self.dmap[channel] = data,
           // PPU アドレス (to)
-          1 => self.bbad[channel] = data,
+          0x01 => self.bbad[channel] = data,
           // Memory アドレス (from)
-          2 => self.a1[channel] = (self.a1[channel] & 0xFFFF00) | (data as u32),
-          3 => self.a1[channel] = (self.a1[channel] & 0xFF00FF) | ((data as u32) << 8),
-          4 => self.a1[channel] = (self.a1[channel] & 0x00FFFF) | ((data as u32) << 16),
+          0x02 => self.a1[channel] = (self.a1[channel] & 0xFFFF00) | (data as u32),
+          0x03 => self.a1[channel] = (self.a1[channel] & 0xFF00FF) | ((data as u32) << 8),
+          0x04 => self.a1[channel] = (self.a1[channel] & 0x00FFFF) | ((data as u32) << 16),
           // 転送サイズ
-          5 => self.das[channel] = (self.das[channel] & 0xFFFF00) | (data as u32),
-          6 => self.das[channel] = (self.das[channel] & 0xFF00FF) | ((data as u32) << 8),
-          7 => self.das[channel] = (self.das[channel] & 0x00FFFF) | ((data as u32) << 16),
+          0x05 => self.das[channel] = (self.das[channel] & 0xFFFF00) | (data as u32),
+          0x06 => self.das[channel] = (self.das[channel] & 0xFF00FF) | ((data as u32) << 8),
+          0x07 => self.das[channel] = (self.das[channel] & 0x00FFFF) | ((data as u32) << 16),
+          0x08 => self.a2a[channel] = (self.a2a[channel] & 0xFF00) | (data as u16),
+          0x09 => self.a2a[channel] = (self.a2a[channel] & 0x00FF) | (data as u16) << 8,
+          0x0A => self.ntrl[channel] = data,
           _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
         }
       }
@@ -267,10 +300,9 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
-          0x420B => {
-            self.write_dma_registers(addr, data);
-          },
           0x4200..=0x4201 => self.ppu.write(addr, data),
+          0x420B => self.write_dma_registers(addr, data),
+          0x420C => self.write_dma_registers(addr, data),
           0x4202..=0x420D => {
             // ~
             // 420Dh WO - MEMSEL  - WS2制御レジスタ
