@@ -106,36 +106,8 @@ impl Bus {
 
   pub fn tick(&mut self) {
     self.ppu.tick(self.cycles);
-    self.hdma();
+    self.hdma_transfer();
     self.cycles = 0;
-  }
-
-  fn hdma(&mut self) {
-    if self.hdmean == 0 {
-      return
-    }
-    // Vブランク中はHDMAしない
-    if self.ppu.vblank_flag {
-      return
-    }
-    if !self.ppu.hblank_flag {
-      self.transfered_hdma = false;
-      return
-    }
-    if self.transfered_hdma {
-      return
-    }
-    self.transfered_hdma = true;
-
-    for channel in 0..=7 {
-      if self.hdmean & (0x01 << channel) == 0 {
-        continue;
-      }
-      let channel = channel as usize;
-
-      // TODO 転送処理
-    }
-
   }
 
   fn write_dma_registers(&mut self, addr: u16, data: u8) {
@@ -143,7 +115,7 @@ impl Bus {
       0x420B => {
         // DMA有効
         self.mdmean = data;
-        self.do_transfer();
+        self.dma_transfer();
       }
       0x420C => {
         // HDMA有効
@@ -177,7 +149,7 @@ impl Bus {
     }
   }
 
-  fn do_transfer(&mut self) {
+  fn dma_transfer(&mut self) {
     for channel in 0..=7 {
       if self.mdmean & (0x01 << channel) == 0 {
         continue;
@@ -236,7 +208,59 @@ impl Bus {
       }
     }
   }
+
+  fn hdma_transfer(&mut self) {
+    if self.hdmean == 0 {
+      return
+    }
+    // Vブランク中はHDMAしない
+    if self.ppu.vblank_flag {
+      return
+    }
+    if !self.ppu.hblank_flag {
+      self.transfered_hdma = false;
+      return
+    }
+    if self.transfered_hdma {
+      return
+    }
+    self.transfered_hdma = true;
+
+    for channel in 0..=7 {
+      if self.hdmean & (0x01 << channel) == 0 {
+        continue;
+      }
+      let channel = channel as usize;
+
+      let addressing_mode = self.dmap[channel] & 0x40 == 0; // true=直接
+      let mode = self.dmap[channel] & 0x07;
+      let ppu_addr = 0x002100 | (self.bbad[channel] as u32);
+      let mut memory_addr = self.a1[channel] as i64;
+      let indirect_address = self.das[channel];
+      let address = self.a2a[channel];
+      let repeat = self.ntrl[channel] & 0x80 != 0;
+      let line_counter = self.ntrl[channel] & 0x7F;
+
+      if !repeat {
+        continue;
+      }
+
+      /*
+      (*) アドレッシングモード (0x43x0 のビット 6) : 0 = 直接, 1 = 間接
+      (*) 転送モード (0x43x0 のビット 0～2) : 下記参照
+      (*) ポート (0x43x1) : DMAと同じ => PPUアドレス
+      (*) Aアドレス (0x43x2 ～0x43x4) : HDMAテーブルへのポインタ。 必ずしも転送中のフレームに変更する必要はないが、次の転送前に停止するためには変更する必要がある。
+      間接アドレス (0x43x5 ～ 0x43x6) : 間接バンクと一緒に使用。下記参照。
+      (*) 間接バンク (0x43x7) : 間接アドレスと一緒に使用。下記参照。
+      (+) アドレス (0x43x8 ～ 0x43x9) : 下記参照。
+      (+) 繰り返し (0x43xA のビット 7) : 全てのスキャンラインに書き込むかどうか
+      (+) 行カウンタ (0x43xA のビット 0～6) : 下記参照。
+       */
+    }
+
+  }
 }
+
 
 pub trait Mem {
   fn mem_read(&mut self, addr: u32) -> u8;
