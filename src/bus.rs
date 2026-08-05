@@ -230,20 +230,70 @@ impl Bus {
       if self.hdmean & (0x01 << channel) == 0 {
         continue;
       }
+
       let channel = channel as usize;
+
+      if self.ppu.v_counter == 0 {
+        // TODO
+        // 「アドレス」値に、Aアドレスがコピーされる
+        // テーブルから 0x43xA に対して値をロードする (0x00 をロードすると、その場でチャネルを停止する…だろう)
+        // 必要なら、間接アドレスをロードする
+        // 転送実行フラグ(DoTransfer) をTrueにする
+        self.ntrl[channel] = self.mem_read(self.a2a[channel] as u32);
+      }
 
       let addressing_mode = self.dmap[channel] & 0x40 == 0; // true=直接
       let mode = self.dmap[channel] & 0x07;
+      let direction = if (self.dmap[channel] & 0x80) == 0 {
+        DMADrection::CPU_TO_PPU
+      } else {
+        DMADrection::PPU_TO_CPU
+      };
       let ppu_addr = 0x002100 | (self.bbad[channel] as u32);
       let mut memory_addr = self.a1[channel] as i64;
       let indirect_address = self.das[channel];
       let address = self.a2a[channel];
-      let repeat = self.ntrl[channel] & 0x80 != 0;
+      let do_transfer = self.ntrl[channel] & 0x80 != 0;
       let line_counter = self.ntrl[channel] & 0x7F;
 
-      if !repeat {
+      if !do_transfer {
+        self.ntrl[channel] = self.ntrl[channel].wrapping_sub(1);
         continue;
       }
+
+      /*
+        転送実行フラグ(DoTransfer) が False の場合、3段階目へ
+        この転送モードの時、1か2か4バイトが必要
+        アドレス/間接アドレスのいずれかから1バイト読み込み、インクリメントする。
+        ポートに1バイト書き込む。Port+1, Port+2, Port+3 も、転送モードによっては書き込む。
+        DMAの時と同じように、0x2180 を通じてPPU から PPU、RAM から RAMに転送する時は注意が必要。
+        3. 0x43xA をデクリメント
+        転送実行フラグ(DoTransfer) に「繰り返し」ビットと同じ値をセット
+      */
+      match mode {
+        0b000	=> {
+          // 1レジスタ1書き込み	1 バイト: p
+          if direction == DMADrection::CPU_TO_PPU {
+              // let v = self.mem_read(memory_addr as u32);
+              // self.mem_write(if (i % 2) == 0 { ppu_addr } else { ppu_addr + 1 }, v);
+              // memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
+            } else {
+              panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
+            }
+        }
+        // 0b001	=> {
+        // }
+        // 0b010 => {
+        // }
+
+        // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+        // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
+        // 0b101	2レジスタ2書き込み(交互)	4 バイト: p, p+1, p, p+1
+        // 0b110	1レジスタ2書き込み	2 バイト: p, p
+        // 0b111	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+        _ => panic!("not inplement HDMA mode ({:03b})", mode)
+      }
+
 
       /*
       (*) アドレッシングモード (0x43x0 のビット 6) : 0 = 直接, 1 = 間接

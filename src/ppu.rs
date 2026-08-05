@@ -81,8 +81,8 @@ pub struct PPU {
   pub frame_updated: bool,
   pub screen_state: Vec<u8>,
 
-  h_counter: u16,
-  v_counter: u16,
+  pub h_counter: u16,
+  pub v_counter: u16,
 
   pub hblank_flag: bool,
   pub vblank_flag: bool,
@@ -191,11 +191,11 @@ impl PPU {
     // H-Blank フラグ H-Blank中はセットされている。H-Blankの外ではクリアされる。
     // セットされるタイミングは、Hカウンタが 0x121 ～ 0x122 (289 ～ 290) の時で、
     // クリアされるタイミングは、Hカウンタが 0x12 ～ 0x18 (18 ～ 24) の時。
-    if !self.hblank_flag && self.h_counter >= 289 {
-      self.hblank_flag = true;
-    }
     if self.hblank_flag && self.h_counter >= 18 {
       self.hblank_flag = false;
+    }
+    if !self.hblank_flag && self.h_counter >= 289 {
+      self.hblank_flag = true;
     }
 
     if self.v_counter > 224 {
