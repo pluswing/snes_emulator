@@ -66,11 +66,12 @@ pub struct Bus {
   das: [u32; 8],
   // 43x8h RW - A2AxL   - HDMA Table Current Address (low)
   // 43x9h RW - A2AxH   - HDMA Table Current Address (high)
-  a2a: [u16; 8],
+  a2: [u16; 8],
   // 43xAh RW - NTRLx   - HDMA Line-Counter (from current Table entry)
   ntrl: [u8; 8],
 
   transfered_hdma: bool,
+  transfer: [bool; 8],
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,10 +98,11 @@ impl Bus {
       bbad: [0xFF; 8],
       a1: [0x00FFFF; 8],
       das: [0xFFFFFF; 8],
-      a2a: [0xFFFF; 8],
+      a2: [0xFFFF; 8],
       ntrl: [0xFF; 8],
 
       transfered_hdma: false,
+      transfer: [false; 8],
     }
   }
 
@@ -140,8 +142,8 @@ impl Bus {
           0x05 => self.das[channel] = (self.das[channel] & 0xFFFF00) | (data as u32),
           0x06 => self.das[channel] = (self.das[channel] & 0xFF00FF) | ((data as u32) << 8),
           0x07 => self.das[channel] = (self.das[channel] & 0x00FFFF) | ((data as u32) << 16),
-          0x08 => self.a2a[channel] = (self.a2a[channel] & 0xFF00) | (data as u16),
-          0x09 => self.a2a[channel] = (self.a2a[channel] & 0x00FF) | (data as u16) << 8,
+          0x08 => self.a2[channel] = (self.a2[channel] & 0xFF00) | (data as u16),
+          0x09 => self.a2[channel] = (self.a2[channel] & 0x00FF) | (data as u16) << 8,
           0x0A => self.ntrl[channel] = data,
           _ => panic!("not implemented write_dma_registers({:04X}, {:02X})", addr, data)
         }
@@ -232,17 +234,28 @@ impl Bus {
       }
 
       let channel = channel as usize;
+      let addressing_mode = self.dmap[channel] & 0x40 == 0; // true=直接
 
       if self.ppu.v_counter == 0 {
         // TODO
         // 「アドレス」値に、Aアドレスがコピーされる
         // テーブルから 0x43xA に対して値をロードする (0x00 をロードすると、その場でチャネルを停止する…だろう)
-        // 必要なら、間接アドレスをロードする
+        // 必要なら、間接アドレスをロードする => addressing_mode
         // 転送実行フラグ(DoTransfer) をTrueにする
-        self.ntrl[channel] = self.mem_read(self.a2a[channel] as u32);
+        self.a2[channel] = (self.a1[channel] & 0x00FFFF) as u16;
+        self.ntrl[channel] = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32);
+        self.a2[channel] = self.a2[channel].wrapping_add(1);
+        if addressing_mode == false {
+          // 間接
+          let addr_l = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32) as u32;
+          self.a2[channel] = self.a2[channel].wrapping_add(1);
+          let addr_h = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32) as u32;
+          self.a2[channel] = self.a2[channel].wrapping_add(1);
+          self.das[channel] = (self.das[channel] & 0xFF0000) | (addr_h << 8) | addr_l;
+        }
+        self.transfer[channel] = true;
       }
 
-      let addressing_mode = self.dmap[channel] & 0x40 == 0; // true=直接
       let mode = self.dmap[channel] & 0x07;
       let direction = if (self.dmap[channel] & 0x80) == 0 {
         DMADrection::CPU_TO_PPU
@@ -250,64 +263,78 @@ impl Bus {
         DMADrection::PPU_TO_CPU
       };
       let ppu_addr = 0x002100 | (self.bbad[channel] as u32);
-      let mut memory_addr = self.a1[channel] as i64;
-      let indirect_address = self.das[channel];
-      let address = self.a2a[channel];
-      let do_transfer = self.ntrl[channel] & 0x80 != 0;
-      let line_counter = self.ntrl[channel] & 0x7F;
 
-      if !do_transfer {
-        self.ntrl[channel] = self.ntrl[channel].wrapping_sub(1);
-        continue;
-      }
+      if self.transfer[channel] {
+        // アドレス/間接アドレスのいずれかから1バイト読み込み、インクリメントする。
+        // -> modeによって、2バイトよむとかも必要。なはず。
+        let value = if addressing_mode {
+          // 直接
+          let v = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32);
+          self.a2[channel] = self.a2[channel].wrapping_add(1);
+          v
+        } else {
+          // 間接
+          let addr_l = self.mem_read(self.das[channel]) as u32;
+          self.das[channel] = self.das[channel].wrapping_add(1);
+          let addr_h = self.mem_read(self.das[channel]) as u32;
+          self.das[channel] = self.das[channel].wrapping_add(1);
+          let v = self.mem_read((addr_h << 8) | addr_l);
+          v
+        };
 
-      /*
-        転送実行フラグ(DoTransfer) が False の場合、3段階目へ
-        この転送モードの時、1か2か4バイトが必要
-        アドレス/間接アドレスのいずれかから1バイト読み込み、インクリメントする。
-        ポートに1バイト書き込む。Port+1, Port+2, Port+3 も、転送モードによっては書き込む。
-        DMAの時と同じように、0x2180 を通じてPPU から PPU、RAM から RAMに転送する時は注意が必要。
-        3. 0x43xA をデクリメント
-        転送実行フラグ(DoTransfer) に「繰り返し」ビットと同じ値をセット
-      */
-      match mode {
-        0b000	=> {
-          // 1レジスタ1書き込み	1 バイト: p
-          if direction == DMADrection::CPU_TO_PPU {
-              // let v = self.mem_read(memory_addr as u32);
-              // self.mem_write(if (i % 2) == 0 { ppu_addr } else { ppu_addr + 1 }, v);
-              // memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
-            } else {
-              panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
-            }
+        // ポートに1バイト書き込む。Port+1, Port+2, Port+3 も、転送モードによっては書き込む。
+        // 書き込みもモードのよって、2バイトとかもある。
+        match mode {
+          0b000	=> {
+            // 1レジスタ1書き込み	1 バイト: p
+            if direction == DMADrection::CPU_TO_PPU {
+              self.mem_write(ppu_addr, value);
+              } else {
+                panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
+              }
+          }
+          // 0b001	=> {
+          // }
+          // 0b010 => {
+          // }
+
+          // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+          // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
+          // 0b101	2レジスタ2書き込み(交互)	4 バイト: p, p+1, p, p+1
+          // 0b110	1レジスタ2書き込み	2 バイト: p, p
+          // 0b111	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
+          _ => panic!("not inplement HDMA mode ({:03b})", mode)
         }
-        // 0b001	=> {
-        // }
-        // 0b010 => {
-        // }
-
-        // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
-        // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
-        // 0b101	2レジスタ2書き込み(交互)	4 バイト: p, p+1, p, p+1
-        // 0b110	1レジスタ2書き込み	2 バイト: p, p
-        // 0b111	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
-        _ => panic!("not inplement HDMA mode ({:03b})", mode)
       }
 
+      // 3. 0x43xA をデクリメント
+      // 転送実行フラグ(DoTransfer) に「繰り返し」ビットと同じ値をセット
+      self.ntrl[channel] = self.ntrl[channel].wrapping_sub(1);
+      self.transfer[channel] = self.ntrl[channel] & 0x7F != 0;
 
-      /*
-      (*) アドレッシングモード (0x43x0 のビット 6) : 0 = 直接, 1 = 間接
-      (*) 転送モード (0x43x0 のビット 0～2) : 下記参照
-      (*) ポート (0x43x1) : DMAと同じ => PPUアドレス
-      (*) Aアドレス (0x43x2 ～0x43x4) : HDMAテーブルへのポインタ。 必ずしも転送中のフレームに変更する必要はないが、次の転送前に停止するためには変更する必要がある。
-      間接アドレス (0x43x5 ～ 0x43x6) : 間接バンクと一緒に使用。下記参照。
-      (*) 間接バンク (0x43x7) : 間接アドレスと一緒に使用。下記参照。
-      (+) アドレス (0x43x8 ～ 0x43x9) : 下記参照。
-      (+) 繰り返し (0x43xA のビット 7) : 全てのスキャンラインに書き込むかどうか
-      (+) 行カウンタ (0x43xA のビット 0～6) : 下記参照。
-       */
+      let line_counter = self.ntrl[channel] & 0x7F;
+      if line_counter == 0 {
+        // 「アドレス」から次の1バイトを読み込み、0x43xA に入れる(行番号と繰り返しも同じようにする)。
+        // 間接アドレスモードの時、「アドレス」から2バイト読み込み、「間接アドレス」に入れ、 「アドレス」の値を2バイト分インクリメントする。
+        // 注(奇妙な動作)：0x43xA が 0 で、処理中のチャネルが現在の行で最後のHDMAチャネルだった場合、 「アドレス」から1バイトのみ読み込まれ、下位バイトには0x00が適用される。 「アドレス」は1つだけインクリメントされ、1少ないCPUサイクルが消費される。
+        // 0x43xA が0の時、処理中のHDMAチャネルのこのフレームでの転送は終了する。 0x420c のビットはクリアされないが、次のフレームには自動的に開始される。
+        // 転送実行フラグ(DoTransfer) をTrueにする
+        self.ntrl[channel] = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32);
+        self.a2[channel] = self.a2[channel].wrapping_add(1);
+        if addressing_mode == false {
+          // 間接
+          let addr_l = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32) as u32;
+          self.a2[channel] = self.a2[channel].wrapping_add(1);
+          let addr_h = self.mem_read((self.a1[channel] & 0xFF0000) | self.a2[channel] as u32) as u32;
+          self.a2[channel] = self.a2[channel].wrapping_add(1);
+          self.das[channel] = (self.das[channel] & 0xFF0000) | (addr_h << 8) | addr_l;
+        }
+        if self.ntrl[channel] == 0 {
+          // TODO 転送終了
+        }
+        self.transfer[channel] = true;
+      }
     }
-
   }
 }
 
