@@ -72,6 +72,7 @@ pub struct Bus {
 
   transfered_hdma: bool,
   transfer: [bool; 8],
+  hdma_transfer_finished: [bool; 8],
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,6 +104,7 @@ impl Bus {
 
       transfered_hdma: false,
       transfer: [false; 8],
+      hdma_transfer_finished: [false; 8],
     }
   }
 
@@ -217,6 +219,7 @@ impl Bus {
     }
     // Vブランク中はHDMAしない
     if self.ppu.vblank_flag {
+      self.hdma_transfer_finished = [false; 8];
       return
     }
     if !self.ppu.hblank_flag {
@@ -233,11 +236,14 @@ impl Bus {
         continue;
       }
 
+      if self.hdma_transfer_finished[channel] {
+        continue;
+      }
+
       let channel = channel as usize;
       let addressing_mode = self.dmap[channel] & 0x40 == 0; // true=直接
 
       if self.ppu.v_counter == 0 {
-        // TODO
         // 「アドレス」値に、Aアドレスがコピーされる
         // テーブルから 0x43xA に対して値をロードする (0x00 をロードすると、その場でチャネルを停止する…だろう)
         // 必要なら、間接アドレスをロードする => addressing_mode
@@ -289,14 +295,21 @@ impl Bus {
             // 1レジスタ1書き込み	1 バイト: p
             if direction == DMADrection::CPU_TO_PPU {
               self.mem_write(ppu_addr, value);
-              } else {
-                panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
-              }
+            } else {
+              panic!("not inplement HDMA 1レジスタ1書き込み PPU to CPU")
+            }
           }
           // 0b001	=> {
           // }
-          // 0b010 => {
-          // }
+          0b010 => {
+            // 1レジスタ2書き込み	2 バイト: p, p
+            if direction == DMADrection::CPU_TO_PPU {
+              self.mem_write(ppu_addr, value);
+              self.mem_write(ppu_addr + 1, value);
+            } else {
+              panic!("not inplement HDMA 1レジスタ2書き込み PPU to CPU")
+            }
+          }
 
           // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
           // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
@@ -330,7 +343,8 @@ impl Bus {
           self.das[channel] = (self.das[channel] & 0xFF0000) | (addr_h << 8) | addr_l;
         }
         if self.ntrl[channel] == 0 {
-          // TODO 転送終了
+          // 転送終了
+          self.hdma_transfer_finished[channel] = true;
         }
         self.transfer[channel] = true;
       }
