@@ -8,11 +8,11 @@ use cartridge::Cartridge;
 use bus::Bus;
 use cpu::CPU;
 use ppu::PPU;
+use apu::APU;
 
 use sdl3::pixels::{Color, PixelFormat};
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
-use std::time::Duration;
 
 fn main() {
 
@@ -36,10 +36,11 @@ fn main() {
 
   let mut event_pump = sdl_context.event_pump().unwrap();
 
-  let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
-  // let cartridge = Cartridge::new("rom/SNES/TEST/ppubusact.sfc");
+  // let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
+  // let cartridge = Cartridge::new("rom/SNES/TEST/gradient-test.sfc");
+  let cartridge = Cartridge::new("rom/SNES/TEST/ppubusact.sfc");
   // let mut cartridge = Cartridge::new("rom/SNES/ROM/CHRONO TRIGGER/50/Chrono Trigger (Japan).sfc");
-  // let cartridge = Cartridge::new("rom/SNES/ROM/SUPERMARIO COLLECTION/61/Super Mario Collection (Japan).sfc");
+  let cartridge = Cartridge::new("rom/SNES/ROM/SUPERMARIO COLLECTION/61/Super Mario Collection (Japan).sfc");
   // let cartridge = Cartridge::new("rom/SNES/ROM/SUPER BOMBERMAN/77/Super Bomberman (Japan).sfc");
   let ppu = PPU::new();
   let bus = Bus::new(
@@ -49,11 +50,13 @@ fn main() {
   let mut cpu = CPU::new(bus);
 
   cpu.reset();
+  let mut frame = 0;
 
   'running: loop {
     cpu.run();
     if cpu.bus.ppu.frame_updated {
       cpu.bus.ppu.frame_updated = false;
+      frame += 1;
 
       for event in event_pump.poll_iter() {
         match event {
@@ -68,6 +71,10 @@ fn main() {
       canvas.clear();
       texture.update(None, &cpu.bus.ppu.screen_state, 256 * 3).unwrap();
       canvas.copy(&texture, None, None).unwrap();
+
+      canvas.set_draw_color((255, 0, 0));
+      canvas.draw_debug_text(format!("FRAME: {}", frame).as_str(), (0, 100)).unwrap();
+
       canvas.present();
     }
 

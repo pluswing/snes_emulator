@@ -393,6 +393,7 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
+          // 0x4210..=0x4212 => self.ppu.read(addr),
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }

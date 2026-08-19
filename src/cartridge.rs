@@ -93,6 +93,10 @@ impl Cartridge {
         // HiROM/64K Banks             Mode 21 (HiROM)
         0
       }
+      // 2=LoROM/32K Banks + S-DD1     Mode 22 (mappable) "Super MMC"
+      // 3=LoROM/32K Banks + SA-1      Mode 23 (mappable) "Emulates Super MMC"
+      // 5=HiROM/64K Banks             Mode 25 (ExHiROM)
+      // A=HiROM/64K Banks + SPC7110   Mode 25? (mappable)
       mode => panic!("invalid mapping mode {:02X}", mode)
     }
   }
