@@ -8,8 +8,11 @@ impl APU {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
+    println!("APU write({:06X}, {:02X})", addr, data);
   }
   pub fn read(&mut self, addr: u16) -> u8 {
+    println!("APU read({:06X})", addr);
+    0
   }
   // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0        (00h/00h)
   // 2141h RW - APUI01  - Main CPU to Sound CPU Communication Port 1        (00h/00h)

@@ -3,12 +3,12 @@ mod opscodes;
 mod ppu;
 mod bus;
 mod cartridge;
+mod apu;
 
 use cartridge::Cartridge;
 use bus::Bus;
 use cpu::CPU;
 use ppu::PPU;
-use apu::APU;
 
 use sdl3::pixels::{Color, PixelFormat};
 use sdl3::event::Event;

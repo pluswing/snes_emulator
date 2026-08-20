@@ -1,6 +1,6 @@
 use core::panic;
 
-use crate::{cartridge::{self, Cartridge}, ppu::PPU};
+use crate::{cartridge::{self, Cartridge}, ppu::PPU, apu::APU};
 
 #[repr(u8)]
 enum MemorySpeed {
@@ -42,6 +42,7 @@ fn memory_speed(bank: u8, addr: u16) -> MemorySpeed {
 pub struct Bus {
   wram: Vec<u8>,
   pub ppu: PPU,
+  pub apu: APU,
   cartridge: Cartridge,
   pub cycles: u32,
 
@@ -70,6 +71,12 @@ pub struct Bus {
   // 43xAh RW - NTRLx   - HDMA Line-Counter (from current Table entry)
   ntrl: [u8; 8],
 
+  // wram
+  // 2181h WO - WMADDL  - WRAMアドレスレジスタ (下位8bit)  (W)
+  // 2182h WO - WMADDM  - WRAMアドレスレジスタ (中位8bit) (W)
+  // 2183h WO - WMADDH  - WRAMアドレスレジスタ (上位1bit)  (W)
+  wmadd: u32,
+
   transfered_hdma: bool,
   transfer: [bool; 8],
   hdma_transfer_finished: [bool; 8],
@@ -87,6 +94,7 @@ impl Bus {
     Self {
       wram: vec![0; 0x1_0000 * 2],
       ppu,
+      apu: APU::new(),
       cartridge,
       cycles: 0,
       memory: vec![0; 0x100_0000],
@@ -101,6 +109,8 @@ impl Bus {
       das: [0xFFFFFF; 8],
       a2: [0xFFFF; 8],
       ntrl: [0xFF; 8],
+
+      wmadd: 0x000000,
 
       transfered_hdma: false,
       transfer: [false; 8],
@@ -350,6 +360,37 @@ impl Bus {
       }
     }
   }
+
+  fn write_wram_registers(&mut self, addr: u16, data: u8) {
+    match addr {
+      0x2180 => self.write_wram(data),
+      0x2181 => self.wmadd = (self.wmadd & 0xFFFF00) | (data as u32),
+      0x2182 => self.wmadd = (self.wmadd & 0xFF00FF) | ((data as u32) << 8),
+      0x2183 => self.wmadd = (self.wmadd & 0x00FFFF) | ((data as u32) << 16),
+      _ => panic!("not implemented write_wram_registers({:04X})", addr),
+    }
+  }
+
+  fn read_wram_registers(&mut self, addr: u16) -> u8 {
+    match addr {
+      0x2180 => self.read_wram(),
+      0x2181 => 0, // open bus
+      0x2182 => 0, // open bus
+      0x2183 => 0, // open bus
+      _ => panic!("not implemented read_wram_registers({:04X})", addr),
+    }
+
+  }
+  fn write_wram(&mut self, data: u8) {
+    // TODO wmaddを確認しつつ、なんらかの制御が必要？
+    self.wram[self.wmadd as usize] = data;
+    self.wmadd = self.wmadd.wrapping_add(1);
+  }
+  fn read_wram(&mut self) -> u8 {
+    let v = self.wram[self.wmadd as usize];
+    self.wmadd = self.wmadd.wrapping_add(1);
+    v
+  }
 }
 
 
@@ -373,6 +414,8 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
+          0x2140..=0x217F => self.apu.read(addr),
+          0x2180..=0x2183 => self.read_wram_registers(addr),
           0x4210..=0x4212 => self.ppu.read(addr),
           0x4213 => self.rdio,
           0x4214..=0x421F => {
@@ -416,6 +459,8 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
+          0x2140..=0x217F => self.apu.write(addr, data),
+          0x2180..=0x2183 => self.write_wram_registers(addr, data),
           0x4200..=0x4201 => self.ppu.write(addr, data),
           0x420B => self.write_dma_registers(addr, data),
           0x420C => self.write_dma_registers(addr, data),
