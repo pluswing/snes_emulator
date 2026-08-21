@@ -40,19 +40,19 @@ impl Cartridge {
           0x00..=0x2F => {
             match addr {
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
+              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
           0x30..=0x3F => {
             match addr {
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
+              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
           0x40..=0x5F => {
             match addr {
+              0x0000..=0x7FFF => self.rom[addr as usize],
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
             }
           }
           0x70..=0x77	=> {
@@ -60,33 +60,33 @@ impl Cartridge {
               0x0000..=0x7FFF => {
                 0 // FIXME Mode 20 SRAM (256Kバイト)
               }
-              _ => panic!("should not reach")
+              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
           // 0x80~0xDF バンク0x00-0x5Fのミラー
           0x80..=0xAF => {
             match addr {
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
+              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
           0xB0..=0xBF => {
             match addr {
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
+              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
           0xC0..=0xDF => {
             match addr {
+              0x0000..=0x7FFF => self.rom[addr as usize],
               0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach")
             }
           },
           0xE0..=0xFF => {
             // 予約済み
             0
           }
-          _ => panic!("should not reach")
+          _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
         }
       }
       0x1 => {

@@ -185,6 +185,18 @@ impl Bus {
       let mode = self.dmap[channel] & 0x07;
 
       match mode {
+        0b000 => {
+          // 1レジスタ1書き込み	1 バイト: p
+          for _ in 0..transfer_size {
+            if direction == DMADrection::CPU_TO_PPU {
+              let v = self.mem_read(memory_addr as u32);
+              self.mem_write(ppu_addr, v);
+              memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
+            } else {
+              panic!("not inplement DMA 1レジスタ1書き込み PPU to CPU")
+            }
+          }
+        }
         0b001	=> {
           // 2レジスタ1書き込み
           for i in 0..transfer_size {
@@ -205,13 +217,13 @@ impl Bus {
               println!("DMA({}) {:06X} {:04X}", i, memory_addr, ppu_addr);
               let v = self.mem_read(memory_addr as u32);
               self.mem_write(ppu_addr, v);
+              // self.mem_write(ppu_addr, v); ??
               memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
             } else {
               panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
             }
           }
         }
-        // 0b000	1レジスタ1書き込み	1 バイト: p
 
         // 0b011	2レジスタ2書き込み(それぞれ)	4 バイト: p, p, p+1, p+1
         // 0b100	4レジスタ1書き込み	4 バイト: p, p+1, p+2, p+3
@@ -374,20 +386,20 @@ impl Bus {
   fn read_wram_registers(&mut self, addr: u16) -> u8 {
     match addr {
       0x2180 => self.read_wram(),
-      0x2181 => 0, // open bus
-      0x2182 => 0, // open bus
-      0x2183 => 0, // open bus
+      0x2181 => 0, // TODO open bus
+      0x2182 => 0, // TODO open bus
+      0x2183 => 0, // TODO open bus
       _ => panic!("not implemented read_wram_registers({:04X})", addr),
     }
-
   }
+
   fn write_wram(&mut self, data: u8) {
-    // TODO wmaddを確認しつつ、なんらかの制御が必要？
-    self.wram[self.wmadd as usize] = data;
+    self.mem_write(self.wmadd, data);
     self.wmadd = self.wmadd.wrapping_add(1);
   }
+
   fn read_wram(&mut self) -> u8 {
-    let v = self.wram[self.wmadd as usize];
+    let v = self.mem_read(self.wmadd);
     self.wmadd = self.wmadd.wrapping_add(1);
     v
   }
@@ -422,6 +434,7 @@ impl Mem for Bus {
             println!("mem_read({:02X}:{:04X})", bank, addr);
             0
           }
+          0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -461,6 +474,7 @@ impl Mem for Bus {
           0x2100..=0x213F => self.ppu.write(addr, data),
           0x2140..=0x217F => self.apu.write(addr, data),
           0x2180..=0x2183 => self.write_wram_registers(addr, data),
+          0x2184 => {}, // TODO マリオコレクションでアクセス（これなに？）
           0x4200..=0x4201 => self.ppu.write(addr, data),
           0x420B => self.write_dma_registers(addr, data),
           0x420C => self.write_dma_registers(addr, data),
