@@ -217,7 +217,9 @@ impl Bus {
               println!("DMA({}) {:06X} {:04X}", i, memory_addr, ppu_addr);
               let v = self.mem_read(memory_addr as u32);
               self.mem_write(ppu_addr, v);
-              // self.mem_write(ppu_addr, v); ??
+              // TODO あってる？
+              let v = self.mem_read(memory_addr as u32 + 1);
+              self.mem_write(ppu_addr, v);
               memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
             } else {
               panic!("not inplement DMA 2レジスタ1書き込み PPU to CPU")
@@ -424,7 +426,10 @@ impl Mem for Bus {
     match bank {
       0x00..=0x3F => {
         match addr {
-          0x0000..=0x1FFF => self.wram[addr as usize],
+          0x0000..=0x1FFF => {
+            println!("READ WRAM {:04X} => {:02X}", addr, self.wram[addr as usize]);
+            self.wram[addr as usize]
+          }
           0x2100..=0x213F => self.ppu.read(addr),
           0x2140..=0x217F => self.apu.read(addr),
           0x2180..=0x2183 => self.read_wram_registers(addr),
@@ -470,7 +475,10 @@ impl Mem for Bus {
     match bank {
     0x00..=0x3F => {
         match addr {
-          0x0000..=0x1FFF => self.wram[addr as usize] = data,
+          0x0000..=0x1FFF => {
+            println!("WRITE WRAM {:04X} => {:02X}", addr, data);
+            self.wram[addr as usize] = data;
+          }
           0x2100..=0x213F => self.ppu.write(addr, data),
           0x2140..=0x217F => self.apu.write(addr, data),
           0x2180..=0x2183 => self.write_wram_registers(addr, data),
