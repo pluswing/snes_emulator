@@ -183,6 +183,7 @@ impl Bus {
         DMADrection::PPU_TO_CPU
       };
       let mode = self.dmap[channel] & 0x07;
+      println!("DMA({}) {:06X} :: {:04X} S:{:04X}", channel, memory_addr, ppu_addr, transfer_size);
 
       match mode {
         0b000 => {
@@ -214,7 +215,6 @@ impl Bus {
           // 0b010	1レジスタ2書き込み	2 バイト: p, p
           for i in 0..transfer_size {
             if direction == DMADrection::CPU_TO_PPU {
-              println!("DMA({}) {:06X} {:04X}", i, memory_addr, ppu_addr);
               let v = self.mem_read(memory_addr as u32);
               self.mem_write(ppu_addr, v);
               // TODO あってる？
@@ -396,7 +396,9 @@ impl Bus {
   }
 
   fn write_wram(&mut self, data: u8) {
-    self.mem_write(self.wmadd, data);
+    // println!("write_wram({:06X}, {:02X})", self.wmadd, data);
+    // FIXME: DMA で、WRAM からこのレジスタにアクセスすることはできず、 WRAM への書き込み操作は実行されません。
+    // self.mem_write(self.wmadd, data);
     self.wmadd = self.wmadd.wrapping_add(1);
   }
 
@@ -427,7 +429,7 @@ impl Mem for Bus {
       0x00..=0x3F => {
         match addr {
           0x0000..=0x1FFF => {
-            println!("READ WRAM {:04X} => {:02X}", addr, self.wram[addr as usize]);
+            // println!("READ WRAM {:04X} => {:02X}", addr, self.wram[addr as usize]);
             self.wram[addr as usize]
           }
           0x2100..=0x213F => self.ppu.read(addr),
@@ -476,7 +478,7 @@ impl Mem for Bus {
     0x00..=0x3F => {
         match addr {
           0x0000..=0x1FFF => {
-            println!("WRITE WRAM {:04X} => {:02X}", addr, data);
+            // println!("WRITE WRAM {:04X} => {:02X}", addr, data);
             self.wram[addr as usize] = data;
           }
           0x2100..=0x213F => self.ppu.write(addr, data),

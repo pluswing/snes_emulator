@@ -558,7 +558,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                println!("{:06X} {}", pc, op.name);
+                // println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
@@ -1110,7 +1110,7 @@ impl CPU {
     pub fn sta(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let a = self.get_register_a();
-      println!("STA ADDR: {:06X} => {:04X}", addr, a);
+      // println!("STA ADDR: {:06X} => {:04X}", addr, a);
       self.mem_write_auto(addr, a);
     }
 
@@ -1678,7 +1678,7 @@ impl CPU {
     pub fn ora(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value: u16 = self.mem_read_auto(addr);
-        println!("ORA A:{:04X}, ADDR: {:06X}, V: {:04X}", self.get_register_a(), addr, value);
+        // println!("ORA A:{:04X}, ADDR: {:06X}, V: {:04X}", self.get_register_a(), addr, value);
         let a = self.get_register_a() | value;
         self.set_register_a(a);
         let a = self.get_register_a();
