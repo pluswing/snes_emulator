@@ -194,7 +194,10 @@ impl Bus {
               self.mem_write(ppu_addr, v);
               memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
             } else {
-              panic!("not inplement DMA 1レジスタ1書き込み PPU to CPU")
+              // panic!("not inplement DMA 1レジスタ1書き込み PPU to CPU")
+              let v = self.mem_read(ppu_addr);
+              self.mem_write(memory_addr as u32, v);
+              memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
             }
           }
         }

@@ -384,6 +384,47 @@ impl PPU {
     }
   }
 
+  fn read_vmdatal(&mut self) -> u8 {
+    let vmadd = (self.vmadd & 0x7FFF) as usize;
+    let data = self.vmdata[vmadd] & 0x00FF;
+    if self.increment_timing() == 0 {
+      self.increment_vmadd();
+    }
+    data as u8
+  }
+
+  fn read_vmdatah(&mut self) -> u8 {
+    let vmadd = (self.vmadd & 0x7FFF) as usize;
+    let data = (self.vmdata[vmadd] & 0xFF00) >> 8;
+    if self.increment_timing() == 1 {
+      self.increment_vmadd();
+    }
+    data as u8
+  }
+
+  fn write_cgdata(&mut self, data: u8) {
+    println!("write cgdata(low={}) {:02X} => {:02X}", self.cg_write_low, self.cgadd, data);
+    if self.cg_write_low {
+      self.cgdata[self.cgadd as usize] = self.replace_lsb(self.cgdata[self.cgadd as usize], data);
+    } else {
+      self.cgdata[self.cgadd as usize] = self.replace_msb(self.cgdata[self.cgadd as usize], data);
+      self.cgadd = self.cgadd.wrapping_add(1);
+    }
+    self.cg_write_low = !self.cg_write_low;
+  }
+
+  fn read_cgdata(&mut self) -> u8 {
+    let data = if self.cg_write_low {
+      self.cgdata[self.cgadd as usize] & 0x00FF
+    } else {
+      let data = (self.cgdata[self.cgadd as usize] & 0xFF00) >> 8;
+      self.cgadd = self.cgadd.wrapping_add(1);
+      data
+    };
+    self.cg_write_low = !self.cg_write_low;
+    data as u8
+  }
+
   fn replace_lsb(&self, data: u16, value: u8) -> u16 {
     (data & 0xFF00) | (value as u16)
   }
@@ -420,16 +461,7 @@ impl PPU {
         self.cgadd = data;
         self.cg_write_low = true;
       },
-      0x2122 => {
-        println!("write cgdata(low={}) {:02X} => {:02X}", self.cg_write_low, self.cgadd, data);
-        if self.cg_write_low {
-          self.cgdata[self.cgadd as usize] = self.replace_lsb(self.cgdata[self.cgadd as usize], data);
-        } else {
-          self.cgdata[self.cgadd as usize] = self.replace_msb(self.cgdata[self.cgadd as usize], data);
-          self.cgadd = self.cgadd.wrapping_add(1);
-        }
-        self.cg_write_low = !self.cg_write_low;
-      },
+      0x2122 => self.write_cgdata(data),
       0x2123..=0x0212B => {},
       0x212C => self.tm = data,
       0x212D => self.ts = data,
@@ -460,6 +492,7 @@ impl PPU {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
+      0x2134 => 0, // PPU積レジスタ (下位8bit)
       0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ
         if self.wrio & 0x80 != 0 {
           self.ophct = self.h_counter;
@@ -467,6 +500,9 @@ impl PPU {
         }
         0 // オープンバス
       }
+      0x2139 => self.read_vmdatal(), // VRAM データ読み込み(下位)
+      0x213A => self.read_vmdatah(), // VRAM データ読み込み(上位)
+      0x213B => self.read_cgdata(), // CG データ読み込み
       0x213C => {
         let val = if self.ophct_low {
           self.ophct & 0x00FF

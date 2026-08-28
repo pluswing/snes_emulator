@@ -426,7 +426,7 @@ impl CPU {
               // $01,sのように表します。
               let value = self.mem_read(pc) as u32;
               let addr = (self.stack_pointer as u32).wrapping_add(value);
-              println!("{:04X}, {:06X}", value, addr);
+              // println!("Stack_Relative {:04X}, {:06X}", value, addr);
               addr & 0x00FFFF
             }
             AddressingMode::Stack_Relative_Indirect_Indexed_by_Y => {
@@ -558,7 +558,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                // println!("{:06X} {}", pc, op.name);
+                println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
