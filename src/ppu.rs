@@ -47,6 +47,9 @@ pub struct PPU {
   // 2118h WO - VMDATAL - VRAMデータ書き込み (下位8bit)
   // 2119h WO - VMDATAH - VRAMデータ書き込み (上位8bit)
   vmdata: Vec<u16>,
+  m7a: u16, // 211Bh WO - M7A     - 伸縮回転パラメータA & PPU被乗数レジスタ(FFh)(w2)
+  m7b: u16, // 211Ch WO - M7B     - 伸縮回転パラメータB & PPU乗数レジスタ (FFh)(w2)
+  m7prev: u8,
   // 213Ch RO - OPHCT   - Hカウンタ
   ophct: u16,
   ophct_low: bool,
@@ -125,6 +128,9 @@ impl PPU {
       setini: 0,
       vmadd: 0,
       vmdata: vec![0; 32 * 1024], // 32K Word
+      m7prev: 0xFF,
+      m7a: 0xFFFF,
+      m7b: 0xFFFF,
       ophct: 0x01FF,
       ophct_low: true,
       opvct: 0x01FF,
@@ -456,7 +462,18 @@ impl PPU {
       0x210E => self.bg1vofs = data,
       0x210F..=0x2114 => {}, // FIXME BG2,3,4Xスクロール
       0x2115 => self.vmain = data,
-      0x211A..=0x2120 => {}, // FIXME Mode 7関係
+      0x211A => {},
+      0x211B => {
+        self.m7a = ((data as u16) << 8) | self.m7prev;
+        self.m7prev = data;
+      }
+      0x211C => {
+        self.m7b = ((data as u16) << 8) | self.m7prev;
+        self.m7prev = data;
+      }
+      0x211D..=0x2120 => {
+        println!("Write Mode7 register: {:04X} => {:02X}", addr, data);
+      }, // FIXME Mode 7関係
       0x2121 => {
         self.cgadd = data;
         self.cg_write_low = true;

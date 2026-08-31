@@ -183,7 +183,7 @@ impl Bus {
         DMADrection::PPU_TO_CPU
       };
       let mode = self.dmap[channel] & 0x07;
-      println!("DMA({}) {:06X} :: {:04X} S:{:04X}", channel, memory_addr, ppu_addr, transfer_size);
+      println!("DMA({} :: {:03b}) {:06X} :: {:04X} S:{:04X} D:{:?}", channel, mode, memory_addr, ppu_addr, transfer_size, direction);
 
       match mode {
         0b000 => {
@@ -197,6 +197,7 @@ impl Bus {
               // panic!("not inplement DMA 1レジスタ1書き込み PPU to CPU")
               let v = self.mem_read(ppu_addr);
               self.mem_write(memory_addr as u32, v);
+              // println!("write DMA {:06X} => {:02X}", memory_addr, v);
               memory_addr = (memory_addr & 0xFF0000) | ((memory_addr + (1 * increment_weight)) & 0x00FFFF);
             }
           }
