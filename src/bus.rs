@@ -41,6 +41,7 @@ fn memory_speed(bank: u8, addr: u16) -> MemorySpeed {
 
 pub struct Bus {
   wram: Vec<u8>,
+  ext_wram: Vec<u8>,
   pub ppu: PPU,
   pub apu: APU,
   cartridge: Cartridge,
@@ -92,7 +93,8 @@ enum DMADrection {
 impl Bus {
   pub fn new(ppu: PPU, cartridge: Cartridge) -> Self {
     Self {
-      wram: vec![0; 0x1_0000 * 2],
+      wram: vec![0; 0x1_0000 * 2], // FIXME *2いる？
+      ext_wram: vec![0; 0x1_0000 * 2], // FIXME
       ppu,
       apu: APU::new(),
       cartridge,
@@ -453,8 +455,14 @@ impl Mem for Bus {
       0x40..=0x7D => {
         self.cartridge.read(bank, addr)
       }
-      0x7E..=0x7F => {
-        self.wram[addr as usize]
+      0x7E => {
+        match addr {
+          0x0000..=0x7FFF => self.wram[addr as usize],
+          0x8000..=0xFFFF => self.ext_wram[addr as usize],
+        }
+      }
+      0x7F => {
+        self.ext_wram[addr as usize]
       }
       0x80..=0xBF => {
         match addr {
@@ -507,8 +515,14 @@ impl Mem for Bus {
       0x40..=0x7D => {
         // self.cartridge.read(bank, addr)
       }
-      0x7E..=0x7F => {
-        self.wram[addr as usize] = data
+      0x7E => {
+        match addr {
+          0x0000..=0x7FFF => self.wram[addr as usize] = data,
+          0x8000..=0xFFFF => self.ext_wram[addr as usize] = data,
+        }
+      }
+      0x7F => {
+        self.ext_wram[addr as usize] = data
       }
       0x80..=0xBF => {
         match addr {

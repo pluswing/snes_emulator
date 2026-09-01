@@ -464,11 +464,11 @@ impl PPU {
       0x2115 => self.vmain = data,
       0x211A => {},
       0x211B => {
-        self.m7a = ((data as u16) << 8) | self.m7prev;
+        self.m7a = ((data as u16) << 8) | (self.m7prev as u16);
         self.m7prev = data;
       }
       0x211C => {
-        self.m7b = ((data as u16) << 8) | self.m7prev;
+        self.m7b = ((data as u16) << 8) | (self.m7prev as u16);
         self.m7prev = data;
       }
       0x211D..=0x2120 => {
@@ -509,7 +509,21 @@ impl PPU {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
-      0x2134 => 0, // PPU積レジスタ (下位8bit)
+      0x2134 => {
+        // PPU積レジスタ (下位8bit)
+        let v = (self.m7a as u32) * ((self.m7b as u32) >> 8);
+        (v & 0x0000FF) as u8
+      },
+      0x2135 => {
+        // PPU積レジスタ (中位8bit)
+        let v = (self.m7a as u32) * ((self.m7b as u32) >> 8);
+        ((v & 0x00FF00) >> 8) as u8
+      },
+      0x2136 => {
+        // PPU積レジスタ (上位8bit)
+        let v = (self.m7a as u32) * ((self.m7b as u32) >> 8);
+        ((v & 0xFF0000) >> 16) as u8
+      },
       0x2137 => { // 2137h RO - SLHV    - H/Vカウンタラッチ
         if self.wrio & 0x80 != 0 {
           self.ophct = self.h_counter;
