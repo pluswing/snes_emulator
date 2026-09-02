@@ -37,54 +37,53 @@ impl Cartridge {
       0x0 => {
         // LoROM/32K Banks             Mode 20 (LoROM)
         match bank {
-          0x00..=0x2F => {
+          0x00..=0x3F => {
             match addr {
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
+              0x8000..=0xFFFF => self.rom[addr as usize],
               _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
-          0x30..=0x3F => {
-            match addr {
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
-            }
+          0x40..=0x6F => {
+            self.rom[addr as usize]
           }
-          0x40..=0x5F => {
-            match addr {
-              0x0000..=0x7FFF => self.rom[addr as usize],
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-            }
-          }
-          0x70..=0x77	=> {
+          0x70..=0x7D => {
             match addr {
               0x0000..=0x7FFF => {
                 0 // FIXME Mode 20 SRAM (256Kバイト)
               }
+              0x8000..=0xFFFF => {
+                self.rom[addr as usize]
+              }
+            }
+          }
+          0x80..=0xBF => { // バンク$00 - $3Fのミラー
+            match addr {
+              0x8000..=0xFFFF => self.rom[addr as usize],
               _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
             }
           }
-          // 0x80~0xDF バンク0x00-0x5Fのミラー
-          0x80..=0xAF => {
-            match addr {
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
-            }
-          }
-          0xB0..=0xBF => {
-            match addr {
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-              _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
-            }
-          }
-          0xC0..=0xDF => {
-            match addr {
-              0x0000..=0x7FFF => self.rom[addr as usize],
-              0x8000..=0xFFFF => self.rom[addr as usize - 0x8000],
-            }
+          0xC0..=0xEF => { // バンク$40 - $6Fのミラー
+            self.rom[addr as usize]
           },
-          0xE0..=0xFF => {
-            // 予約済み
-            0
+          0xF0..=0xFD => { // バンク$70 - $7Dのミラー
+            match addr {
+              0x0000..=0x7FFF => {
+                0 // FIXME Mode 20 SRAM (256Kバイト)
+              }
+              0x8000..=0xFFFF => {
+                self.rom[addr as usize]
+              }
+            }
+          }
+          0xFE..=0xFF => {
+            match addr {
+              0x0000..=0x7FFF => {
+                0 // FIXME Mode 20 SRAM (256Kバイト)
+              }
+              0x8000..=0xFFFF => {
+                self.rom[addr as usize]
+              }
+            }
           }
           _ => panic!("should not reach ROM: {:02X}:{:04X}", bank, addr)
         }

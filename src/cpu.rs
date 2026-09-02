@@ -512,9 +512,9 @@ impl CPU {
     fn apply_mode(&mut self, force: bool) {
       if self.is_emulation_mode() {
         if force {
-          print!("SP: {:04X}", self.stack_pointer);
+          // print!("SP: {:04X}", self.stack_pointer);
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
-          println!(" => {:04X} (emu force)", self.stack_pointer);
+          // println!(" => {:04X} (emu force)", self.stack_pointer);
           return
         }
 
@@ -530,9 +530,9 @@ impl CPU {
 
         // AddressingMode::Absolute_LongはJSR命令のテストで必要だったので追加。
         if self.current_op.addressing_mode != AddressingMode::Absolute_Long {
-          print!("SP: {:04X}", self.stack_pointer);
+          // print!("SP: {:04X}", self.stack_pointer);
           self.stack_pointer = 0x0100 | (self.stack_pointer & 0x00FF);
-          println!(" => {:04X} (Absolute_Long)", self.stack_pointer);
+          // println!(" => {:04X} (Absolute_Long)", self.stack_pointer);
         }
       }
     }
@@ -558,7 +558,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                println!("{:06X} {}", pc, op.name);
+                // println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
