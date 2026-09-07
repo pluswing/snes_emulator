@@ -47,9 +47,6 @@ pub struct Bus {
   cartridge: Cartridge,
   pub cycles: u32,
 
-  // FIXME とりあえず
-  pub memory: Vec<u8>, // size=0xFFFFFF
-
   // 4213h RO - RDIO    - Joypad Programmable I/O Port (Input)
   rdio: u8,
 
@@ -93,13 +90,13 @@ enum DMADrection {
 impl Bus {
   pub fn new(ppu: PPU, cartridge: Cartridge) -> Self {
     Self {
-      wram: vec![0; 0x1_0000 * 2], // FIXME *2いる？
-      ext_wram: vec![0; 0x1_0000 * 2], // FIXME
+      // 2つで128KB
+      wram: vec![0; 0x1_0000],
+      ext_wram: vec![0; 0x1_0000],
       ppu,
       apu: APU::new(),
       cartridge,
       cycles: 0,
-      memory: vec![0; 0x100_0000],
 
       rdio: 0x00,
 
@@ -456,10 +453,7 @@ impl Mem for Bus {
         self.cartridge.read(bank, addr)
       }
       0x7E => {
-        match addr {
-          0x0000..=0x7FFF => self.wram[addr as usize],
-          0x8000..=0xFFFF => self.ext_wram[addr as usize],
-        }
+        self.wram[addr as usize]
       }
       0x7F => {
         self.ext_wram[addr as usize]
@@ -516,10 +510,7 @@ impl Mem for Bus {
         // self.cartridge.read(bank, addr)
       }
       0x7E => {
-        match addr {
-          0x0000..=0x7FFF => self.wram[addr as usize] = data,
-          0x8000..=0xFFFF => self.ext_wram[addr as usize] = data,
-        }
+        self.wram[addr as usize] = data
       }
       0x7F => {
         self.ext_wram[addr as usize] = data

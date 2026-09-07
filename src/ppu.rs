@@ -275,6 +275,7 @@ impl PPU {
   }
 
   fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
+    // bg1scの下位2ビットは、タイルマップ水平/垂直ミラー。 => 0x2107
     let base = (((self.bg1sc & 0xFC) as u32) << 8) as usize;
     let offset: usize = y as usize / 8;
     let base = base + 32 * offset;
@@ -284,11 +285,46 @@ impl PPU {
   fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
     // bgモードみる
     //  -> いまは2bpp固定
-    let tilesize: usize = 2 /*bpp*/ * 8 /* 8x8mode */ / 2 /*byte to word */;
+    let bpp = self.bg_bpp(1);
+    let tilesize: usize = bpp * 8 /* 8x8mode */ / 2 /*byte to word */;
+    // bg12nbaは、bg1, bg2のデータが入っている。 => 0x210B
     let base = (((self.bg12nba & 0x0F) as u32) << 12) as usize;
     let addr = base + tilesize * tileindex as usize;
     let data = &self.vmdata[addr..=(addr + tilesize)];
     data
+  }
+
+  fn bg_mode(&self) -> u8 {
+    self.bgmode & 0x03
+  }
+
+  fn bg_bpp(&self, bg: u8) -> usize {
+    match self.bg_mode() {
+      0 => 2,
+      /*
+      1 => {
+        match bg {
+          0 | 1 => 4,
+          3 => 2,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      2	=> {
+        match bg {
+          0 | 1 => 4,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      */
+      3 => {
+        match bg {
+          0 => 8,
+          1 => 4,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      _ => panic!("not inplement bg_bpp. mode: {}, bg: {}", self.bg_mode(), bg)
+    }
   }
 
   fn palette(&mut self, palette_size: u16) -> Vec<[u8; 3]> {
