@@ -283,8 +283,6 @@ impl PPU {
   }
 
   fn bg1tile(&mut self, tileindex: u16) -> &[u16] {
-    // bgモードみる
-    //  -> いまは2bpp固定
     let bpp = self.bg_bpp(1);
     let tilesize: usize = bpp * 8 /* 8x8mode */ / 2 /*byte to word */;
     // bg12nbaは、bg1, bg2のデータが入っている。 => 0x210B
@@ -304,22 +302,22 @@ impl PPU {
       /*
       1 => {
         match bg {
-          0 | 1 => 4,
+          1 | 2 => 4,
           3 => 2,
           _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
         }
       }
       2	=> {
         match bg {
-          0 | 1 => 4,
+          1 | 2 => 4,
           _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
         }
       }
       */
       3 => {
         match bg {
-          0 => 8,
-          1 => 4,
+          1 => 8,
+          2 => 4,
           _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
         }
       }
@@ -327,11 +325,10 @@ impl PPU {
     }
   }
 
-  fn palette(&mut self, palette_size: u16) -> Vec<[u8; 3]> {
-    // 2bpp固定
+  fn palette(&mut self, palette_size: u16, bg: u8) -> Vec<[u8; 3]> {
     let base =  palette_size as usize;
-    let palette_size = 4; // 2bpp
-    let data = &self.cgdata[base..=base + palette_size];
+    let palette_size = 1 << self.bg_bpp(bg);
+    let data = &self.cgdata[base..base+palette_size];
     let mut res: Vec<[u8; 3]> = vec![];
     for v in data {
       res.push(bgr555_to_rgb888(*v));
@@ -365,9 +362,8 @@ impl PPU {
       let palette_select = (tilemap & 0x1C00) >> 10;
 
       let tile = self.bg1tile(tileindex).to_vec();
-      let palette = self.palette(palette_select);
+      let palette = self.palette(palette_select, 1);
 
-      let line = tile[tile_y];
       for x in 0..8 {
 
         if draw_x > WINDOW_WIDTH {
@@ -375,7 +371,21 @@ impl PPU {
         }
 
         let mask = 0x80 >> x;
-        let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+        // 1111_0000b
+        // 1010_1010b
+        // 3232_1010 (10)
+        //  2bpp固定処理
+        // let line = tile[tile_y];
+        // let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+
+        // 8bpp固定
+        let line = &tile[tile_y..tile_y+4];
+        let mut palette_index = 0;
+        for v in line {
+          palette_index = palette_index << 2;
+          palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
+        }
+
         let rgb = palette[palette_index as usize];
 
         let base_index = (scanline as usize * WINDOW_WIDTH + draw_x) * 3;
