@@ -325,9 +325,9 @@ impl PPU {
     }
   }
 
-  fn palette(&mut self, palette_size: u16, bg: u8) -> Vec<[u8; 3]> {
-    let base =  palette_size as usize;
-    let palette_size = 1 << self.bg_bpp(bg);
+  fn palette(&mut self, palette_select: u16, bg: u8) -> Vec<[u8; 3]> {
+    let palette_size = (1 << self.bg_bpp(bg)) as usize;
+    let base =  (palette_select as usize) * palette_size;
     let data = &self.cgdata[base..base+palette_size];
     let mut res: Vec<[u8; 3]> = vec![];
     for v in data {
@@ -363,6 +363,15 @@ impl PPU {
 
       let tile = self.bg1tile(tileindex).to_vec();
       let palette = self.palette(palette_select, 1);
+      println!("PALETTE: {} : {:?}", palette_select, palette);
+
+      let mut base_index = 0;
+      for rgb in &palette {
+        self.screen_state[base_index + 0] = rgb[0];
+        self.screen_state[base_index + 1] = rgb[1];
+        self.screen_state[base_index + 2] = rgb[2];
+        base_index += 3;
+      }
 
       for x in 0..8 {
 
@@ -386,7 +395,7 @@ impl PPU {
           palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
         }
 
-        let rgb = palette[palette_index as usize];
+        let rgb: [u8; 3] = palette[palette_index as usize];
 
         let base_index = (scanline as usize * WINDOW_WIDTH + draw_x) * 3;
         self.screen_state[base_index + 0] = rgb[0];

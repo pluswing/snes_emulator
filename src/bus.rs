@@ -507,7 +507,7 @@ impl Mem for Bus {
         }
       }
       0x40..=0x7D => {
-        // self.cartridge.read(bank, addr)
+        self.cartridge.write(bank, addr, data)
       }
       0x7E => {
         self.wram[addr as usize] = data

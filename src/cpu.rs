@@ -558,7 +558,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                // println!("{:06X} {}", pc, op.name);
+                println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
@@ -1089,7 +1089,7 @@ impl CPU {
     pub fn sty(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let y = self.get_register_y();
-      println!("STY ADDR: {:06X} => {:04X}", addr, y);
+      // println!("STY ADDR: {:06X} => {:04X}", addr, y);
       if self.is_native_mode() {
         self.mem_write_u16(addr, y);
       } else {
@@ -1110,7 +1110,7 @@ impl CPU {
     pub fn sta(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let a = self.get_register_a();
-      // println!("STA ADDR: {:06X} => {:04X}", addr, a);
+      println!("STA A Reg V:{:04X} => ADDR: {:06X}", a, addr);
       self.mem_write_auto(addr, a);
     }
 
@@ -1198,7 +1198,8 @@ impl CPU {
 
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
-        let value = self.mem_read_u16(addr);
+        let value = self.mem_read_auto(addr);
+        println!("LDA: ADDR:{:06X} V:{:04X} => A REG", addr, value);
         self.set_register_a(value);
         let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);
