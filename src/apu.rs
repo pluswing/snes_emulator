@@ -36,6 +36,10 @@ impl APU {
           self.status = 0xCC;
           self.counter = 102;
         }
+        if self.counter == 200 {
+          self.status = 0xAA;
+          self.counter = 201;
+        }
         if self.counter == 30 {
           self.counter = 101;
           self.status = 0x00;

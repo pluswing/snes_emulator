@@ -206,10 +206,10 @@ impl PPU {
 
     if self.v_counter > 224 {
       self.set_nmi();
-      self.frame_updated = true;
     }
 
     if self.v_counter > 261 {
+      self.frame_updated = true;
       self.v_counter = 0;
       self.virq_wait_flag = true;
       self.clear_nmi();
@@ -573,7 +573,8 @@ impl PPU {
       0x2134 => {
         // PPU積レジスタ (下位8bit)
         let v = (self.m7a as u32) * ((self.m7b as u32) >> 8);
-        (v & 0x0000FF) as u8
+        (v & 0x0000FF) as u8;
+        0xFF // FIXME
       },
       0x2135 => {
         // PPU積レジスタ (中位8bit)

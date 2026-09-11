@@ -1409,11 +1409,8 @@ impl CPU {
     pub fn cmp(&mut self, mode: &AddressingMode) {
       let target = self.get_register_a();
       let addr = self.get_operand_address(mode);
-      let value = if self.is_accumulator_16bit_mode() {
-        self.mem_read_u16(addr)
-      } else {
-        self.mem_read(addr) as u16
-      };
+      let value = self.mem_read_auto(addr);
+      println!("CMP: A:{:04X} V:{:04X}  ADDR:{:06X}", target, value, addr);
       if target >= value {
           self.sec(&AddressingMode::Implied);
       } else {
