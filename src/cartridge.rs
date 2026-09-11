@@ -42,7 +42,7 @@ impl Cartridge {
           0x70..=0x7D => {
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize] = data;
               }
               0x8000..=0xFFFF => {
@@ -53,7 +53,7 @@ impl Cartridge {
           0xF0..=0xFD => { // バンク$70 - $7Dのミラー
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize] = data;
               }
               0x8000..=0xFFFF => {
@@ -64,7 +64,7 @@ impl Cartridge {
           0xFE..=0xFF => {
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize] = data
               }
               0x8000..=0xFFFF => {
@@ -118,7 +118,7 @@ impl Cartridge {
           0x70..=0x7D => {
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize]
               }
               0x8000..=0xFFFF => {
@@ -146,7 +146,7 @@ impl Cartridge {
           0xF0..=0xFD => { // バンク$70 - $7Dのミラー
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize]
               }
               0x8000..=0xFFFF => {
@@ -158,7 +158,7 @@ impl Cartridge {
           0xFE..=0xFF => {
             match addr {
               0x0000..=0x7FFF => {
-                let addr = addr / 0x2000;
+                let addr = addr & 0x1FFF;
                 self.sram[addr as usize]
               }
               0x8000..=0xFFFF => {

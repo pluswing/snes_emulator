@@ -1110,7 +1110,7 @@ impl CPU {
     pub fn sta(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let a = self.get_register_a();
-      println!("STA A Reg V:{:04X} => ADDR: {:06X}", a, addr);
+      // println!("STA A Reg V:{:04X} => ADDR: {:06X}", a, addr);
       self.mem_write_auto(addr, a);
     }
 
@@ -1710,7 +1710,7 @@ impl CPU {
       let addr = self.get_operand_address(mode);
       let value = self.mem_read_u16(addr);
       let a: u16 = self.get_register_a();
-      println!("SBC A:{:04X}, ADDR: {:06X}, V: {:04X}", self.get_register_a(), addr, value);
+      // println!("SBC A:{:04X}, ADDR: {:06X}, V: {:04X}", self.get_register_a(), addr, value);
 
       let mut carry = (self.status & FLAG_CARRY) as u16;
 

@@ -119,7 +119,7 @@ impl PPU {
       vmain: 0x0F,
       cgadd: 0,
       cg_write_low: true,
-      cgdata: vec![0; 512], // 256 word
+      cgdata: vec![0; 256], // 256 word
       tm: 0,
       ts: 0,
       tmw: 0,
@@ -362,8 +362,11 @@ impl PPU {
       let palette_select = (tilemap & 0x1C00) >> 10;
 
       let tile = self.bg1tile(tileindex).to_vec();
-      let palette = self.palette(palette_select, 1);
-      println!("PALETTE: {} : {:?}", palette_select, palette);
+      let palette = if self.bg_bpp(1) == 8 {
+        self.palette(0, 1)
+      } else {
+        self.palette(palette_select, 1)
+      };
 
       let mut base_index = 0;
       for rgb in &palette {
@@ -390,6 +393,7 @@ impl PPU {
         // 8bpp固定
         let line = &tile[tile_y..tile_y+4];
         let mut palette_index = 0;
+// FIXME あとで直す。see: https://sneslab.net/wiki/Graphics_Format#8bpp
         for v in line {
           palette_index = palette_index << 2;
           palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
@@ -495,6 +499,7 @@ impl PPU {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
+    println!("WRITE PPU ADDR: {:04X} => {:02X}", addr, data);
     match addr {
       0x2100 => self.inidisp = data,
       0x2101 => self.obsel = data,
@@ -563,6 +568,7 @@ impl PPU {
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
+    println!("READ PPU ADDR: {:04X}", addr);
     match addr {
       0x2134 => {
         // PPU積レジスタ (下位8bit)
