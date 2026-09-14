@@ -40,8 +40,9 @@ fn main() {
   // let cartridge = Cartridge::new("rom/SNES/TEST/gradient-test.sfc");
   let cartridge = Cartridge::new("rom/SNES/TEST/ppubusact.sfc");
   // let mut cartridge = Cartridge::new("rom/SNES/ROM/CHRONO TRIGGER/50/Chrono Trigger (Japan).sfc");
-  let cartridge = Cartridge::new("rom/SNES/ROM/SUPERMARIO COLLECTION/61/Super Mario Collection (Japan).sfc");
+  // let cartridge = Cartridge::new("rom/SNES/ROM/SUPERMARIO COLLECTION/61/Super Mario Collection (Japan).sfc");
   // let cartridge = Cartridge::new("rom/SNES/ROM/SUPER BOMBERMAN/77/Super Bomberman (Japan).sfc");
+  let cartridge = Cartridge::new("rom/SNES/ROM/DRAGONQUEST5/56/Dragon Quest V - Tenkuu no Hanayome (Japan).sfc");
   let ppu = PPU::new();
   let bus = Bus::new(
     ppu,

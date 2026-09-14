@@ -1,6 +1,24 @@
+
+const FLAG_NEGATIVE: u8 = 1 << 7;
+const FLAG_OVERFLOW: u8 = 1 << 6;
+const FLAG_DIRECT_PAGE: u8 = 1 << 5;
+// 4 なし
+const FLAG_HALF_CARRY: u8 = 1 << 3;
+// 2 なし
+const FLAG_ZERO: u8 = 1 << 1;
+const FLAG_CARRY: u8 = 1 << 0;
+
 pub struct APU {
+  // FIXME あとでけす
   status: u8,
-  counter: u8,
+  counter: u32,
+
+  program_counter: u16,
+  ya: u16,
+  x: u8,
+  stack_pointer: u8,
+  program_status: u8,
+  memory: Vec<u8>,
 }
 
 impl APU {
@@ -8,7 +26,30 @@ impl APU {
     Self {
       status: 0xAA,
       counter: 0,
+
+      program_counter: 0xFFC0,
+      ya: 0,
+      x: 0,
+      stack_pointer: 0,
+      program_status: 0,
+      memory: vec![0; 0x10000],
     }
+  }
+
+  fn tick(&mut self, cycles: u32) {
+    // FIXME
+  }
+
+  fn run(&mut self) {
+    let op = self.memory[self.program_counter as usize];
+    match op {
+      0x00 => self.nop(),
+      _ => panic!("not implement op: {:02X}", op)
+    }
+  }
+
+  fn nop(&self) {
+    // なにもしない
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
@@ -40,11 +81,15 @@ impl APU {
           self.status = 0xAA;
           self.counter = 201;
         }
+        if self.counter == 1310 {
+          self.status = 0xCC;
+          self.counter = 1311;
+        }
         if self.counter == 30 {
           self.counter = 101;
           self.status = 0x00;
         }
-        if self.counter < 100 {
+        if self.counter < 65535 {
           self.counter += 1;
         }
         self.status

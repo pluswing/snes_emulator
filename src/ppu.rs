@@ -299,7 +299,6 @@ impl PPU {
   fn bg_bpp(&self, bg: u8) -> usize {
     match self.bg_mode() {
       0 => 2,
-      /*
       1 => {
         match bg {
           1 | 2 => 4,
@@ -313,11 +312,36 @@ impl PPU {
           _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
         }
       }
-      */
       3 => {
         match bg {
           1 => 8,
           2 => 4,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      4 => {
+        match bg {
+          1 => 8,
+          2 => 2,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      5 => {
+        match bg {
+          1 => 4,
+          2 => 2,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      6 => {
+        match bg {
+          1 => 4,
+          _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
+        }
+      }
+      7 => {
+        match bg {
+          1 => 8,
           _ => panic!("invalid bg mode: {}, bg: {}", self.bg_mode(), bg)
         }
       }
@@ -383,21 +407,29 @@ impl PPU {
         }
 
         let mask = 0x80 >> x;
-        // 1111_0000b
-        // 1010_1010b
-        // 3232_1010 (10)
-        //  2bpp固定処理
-        // let line = tile[tile_y];
-        // let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
-
-        // 8bpp固定
-        let line = &tile[tile_y..tile_y+4];
-        let mut palette_index = 0;
-// FIXME あとで直す。see: https://sneslab.net/wiki/Graphics_Format#8bpp
-        for v in line {
-          palette_index = palette_index << 2;
-          palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
-        }
+        let palette_index = match self.bg_bpp(1) {
+          2 => {
+            // 1111_0000b
+            // 1010_1010b
+            // 3232_1010 (10)
+            //  2bpp固定処理
+            let line = tile[tile_y];
+            let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+            palette_index
+          }
+          8 => {
+            // 8bpp固定
+            let line = &tile[tile_y..tile_y+4];
+            let mut palette_index = 0;
+            // FIXME あとで直す。see: https://sneslab.net/wiki/Graphics_Format#8bpp
+            for v in line {
+              palette_index = palette_index << 2;
+              palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
+            }
+            palette_index
+          }
+          _ => 0
+        };
 
         let rgb: [u8; 3] = palette[palette_index as usize];
 
