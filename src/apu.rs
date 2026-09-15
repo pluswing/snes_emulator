@@ -8,6 +8,15 @@ const FLAG_HALF_CARRY: u8 = 1 << 3;
 const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
 
+#[derive(Debug, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
+enum AddressingMode {
+  Immediate,
+  RegisterA,
+  RegisterX,
+  IndirectX,
+}
+
 pub struct APU {
   // FIXME あとでけす
   status: u8,
@@ -42,14 +51,105 @@ impl APU {
 
   fn run(&mut self) {
     let op = self.memory[self.program_counter as usize];
+    self.program_counter += 1;
     match op {
       0x00 => self.nop(),
+      0xCD => self.mov_x(&AddressingMode::Immediate),
+      0xBD => self.mov_sp(&AddressingMode::RegisterX),
+      0xE8 => self.mov_a(&AddressingMode::Immediate),
+      0xC6 => self.move_ix(&AddressingMode::RegisterA),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
 
   fn nop(&self) {
     // なにもしない
+  }
+
+  /*
+  $CD $EF ->  MOV X, #$EF
+  $BD -> MOV SP, X
+  $E8 $00 -> MOV A, #$00
+  $C6 -> MOV (X),A
+  $1D $D0 $FC $8F $AA $F4 $8F $BB $F5 $78
+  $CC $F4 $D0 $FB $2F $19 $EB $F4 $D0 $FC $7E $F4 $D0 $0B $E4 $F5
+  $CB $F4 $D7 $00 $FC $D0 $F3 $AB $01 $10 $EF $7E $F4 $10 $EB $BA
+  $F6 $DA $00 $BA $F4 $C4 $F4 $DD $5D $D0 $DB $1F $00 $00 $C0 $FF
+  */
+
+  // MOV X, #$EF
+  fn mov_x(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::Immediate => {
+        self.x = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+      }
+      _ => panic!("not implemented mov_x")
+    }
+  }
+
+  // MOV SP, X
+  fn mov_sp(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::RegisterX => {
+        self.stack_pointer = self.get_register_x();
+      }
+      _ => panic!("not implemented mov_x")
+    }
+  }
+
+  // MOV A, #$00
+  fn mov_a(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::Immediate => {
+        let v = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        self.set_register_a(v);
+      }
+      _ => panic!("not implemented mov_a")
+    }
+  }
+
+  // MOV (X),A
+  fn move_ix(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::RegisterA => {
+        self.mem_write(self.get_register_x() as u16, self.get_register_a());
+      }
+      _ => panic!("not implemented mov_a")
+    }
+  }
+
+  fn get_register_a(&self) -> u8 {
+    (self.ya & 0x00FF) as u8
+  }
+
+  fn set_register_a(&mut self, value: u8) {
+    self.ya = (self.ya & 0xFF00) | (value as u16)
+  }
+
+  fn get_register_y(&self) -> u8 {
+    (self.ya >> 8) as u8
+  }
+
+  fn set_register_y(&mut self, value: u8) {
+    self.ya = (self.ya & 0x00FF) | ((value as u16) << 8)
+  }
+
+  fn get_register_x(&self) -> u8 {
+    self.x
+  }
+
+  fn set_register_x(&mut self, value: u8) {
+    self.x = value
+  }
+
+  fn mem_read(&mut self, addr: u16) -> u8 {
+    self.memory[addr as usize]
+  }
+
+  fn mem_write(&mut self, addr: u16, data: u8) {
+    self.memory[addr as usize] = data;
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
