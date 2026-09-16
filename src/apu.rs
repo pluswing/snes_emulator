@@ -58,6 +58,8 @@ impl APU {
       0xBD => self.mov_sp(&AddressingMode::RegisterX),
       0xE8 => self.mov_a(&AddressingMode::Immediate),
       0xC6 => self.move_ix(&AddressingMode::RegisterA),
+      0x1D => self.dec(&AddressingMode::RegisterX),
+      0xD0 => self.bne(),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -67,14 +69,40 @@ impl APU {
   }
 
   /*
-  $CD $EF ->  MOV X, #$EF
-  $BD -> MOV SP, X
-  $E8 $00 -> MOV A, #$00
-  $C6 -> MOV (X),A
-  $1D $D0 $FC $8F $AA $F4 $8F $BB $F5 $78
-  $CC $F4 $D0 $FB $2F $19 $EB $F4 $D0 $FC $7E $F4 $D0 $0B $E4 $F5
-  $CB $F4 $D7 $00 $FC $D0 $F3 $AB $01 $10 $EF $7E $F4 $10 $EB $BA
-  $F6 $DA $00 $BA $F4 $C4 $F4 $DD $5D $D0 $DB $1F $00 $00 $C0 $FF
+  -$CD $EF ->  MOV X, #$EF
+  -$BD -> MOV SP, X
+  -$E8 $00 -> MOV A, #$00
+  -$C6 -> MOV (X),A
+  -$1D -> DEC X
+  -$D0 $FC -> BNE $FC
+  $8F $AA -> BNE -
+  $F4 -> MOV $F4,#$AA
+  $8F $BB $F5 -> MOV $F5,#$BB
+  $78 $CC $F4 -> CMP $F4,#$CC
+  $D0 $FB -> BNE -
+  $2F $19 -> BRA Start
+  $EB $F4 -> MOV Y,$F4
+  $D0 $FC -> BNE Trans
+  $7E $F4 -> CMP Y,$F4
+  $D0 $0B -> BNE +
+  $E4 $F5 -> MOV A,$F5
+  $CB $F4 -> MOV $F4,Y
+  $D7 $00 -> MOV [$00]+Y,A
+  $FC -> INC Y
+  $D0 $F3 -> BNE -
+  $AB $01 -> INC $01
+  $10 $EF -> BPL -
+  $7E $F4 -> CMP Y,$F4
+  $10 $EB -> BPL -
+  $BA $F6 -> MOVW YA,$F6
+  $DA $00 -> MOVW $00,YA
+  $BA $F4 -> MOVW YA,$F4
+  $C4 $F4 -> MOV $F4,A
+  $DD -> MOV A,Y
+  $5D -> MOV X,A
+  $D0 $DB -> BNE Trans
+  $1F $00 $00 -> JMP [$0000+X]
+  $C0 $FF -> .DW $FFC0
   */
 
   // MOV X, #$EF
@@ -118,6 +146,28 @@ impl APU {
       }
       _ => panic!("not implemented mov_a")
     }
+  }
+
+  // DEC X
+  fn dec(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::RegisterX => {
+        let x = self.get_register_x().wrapping_sub(1);
+        self.set_register_x(x);
+      }
+      _ => panic!("not implemented mov_a")
+    }
+  }
+
+  // BNE $FC
+  fn bne(&mut self) {
+    let v = self.mem_read(self.program_counter) as i8;
+    self.program_counter += 1;
+    self.program_counter = if v < 0 {
+      self.program_counter.wrapping_sub(v.abs() as u16)
+    } else {
+      self.program_counter.wrapping_add(v as u16)
+    };
   }
 
   fn get_register_a(&self) -> u8 {
