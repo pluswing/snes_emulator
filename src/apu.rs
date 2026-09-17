@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 
 const FLAG_NEGATIVE: u8 = 1 << 7;
 const FLAG_OVERFLOW: u8 = 1 << 6;
@@ -15,6 +17,7 @@ enum AddressingMode {
   RegisterA,
   RegisterX,
   IndirectX,
+  DirectPage,
 }
 
 pub struct APU {
@@ -57,9 +60,13 @@ impl APU {
       0xCD => self.mov_x(&AddressingMode::Immediate),
       0xBD => self.mov_sp(&AddressingMode::RegisterX),
       0xE8 => self.mov_a(&AddressingMode::Immediate),
-      0xC6 => self.move_ix(&AddressingMode::RegisterA),
+      0xC6 => self.mov_ix(&AddressingMode::RegisterA),
       0x1D => self.dec(&AddressingMode::RegisterX),
       0xD0 => self.bne(),
+      0x8F => self.mov_m(&AddressingMode::Immediate),
+      0x78 => self.cmp_m(&AddressingMode::Immediate),
+      0x2F => self.bra(),
+      0xEB => self.mov_y(&AddressingMode::DirectPage),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -74,15 +81,14 @@ impl APU {
   -$E8 $00 -> MOV A, #$00
   -$C6 -> MOV (X),A
   -$1D -> DEC X
-  -$D0 $FC -> BNE $FC
-  $8F $AA -> BNE -
-  $F4 -> MOV $F4,#$AA
-  $8F $BB $F5 -> MOV $F5,#$BB
-  $78 $CC $F4 -> CMP $F4,#$CC
-  $D0 $FB -> BNE -
-  $2F $19 -> BRA Start
-  $EB $F4 -> MOV Y,$F4
-  $D0 $FC -> BNE Trans
+  -$D0 $FC -> BNE -
+  -$8F $AA $F4 -> MOV $F4,#$AA
+  -$8F $BB $F5 -> MOV $F5,#$BB
+  - $78 $CC $F4 -> CMP $F4,#$CC
+  - $D0 $FB -> BNE -
+  - $2F $19 -> BRA Start
+  - $EB $F4 -> MOV Y,$F4
+  - $D0 $FC -> BNE Trans
   $7E $F4 -> CMP Y,$F4
   $D0 $0B -> BNE +
   $E4 $F5 -> MOV A,$F5
@@ -114,6 +120,21 @@ impl APU {
       }
       _ => panic!("not implemented mov_x")
     }
+    self.update_negative_and_zero_flags(self.x);
+  }
+
+  // MOV Y,$F4
+  fn mov_y(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::DirectPage => {
+        let addr = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        let v = self.mem_read(addr as u16);
+        self.set_register_y(v);
+      }
+      _ => panic!("not implemented mov_x")
+    }
+    self.update_negative_and_zero_flags(self.get_register_y());
   }
 
   // MOV SP, X
@@ -124,6 +145,7 @@ impl APU {
       }
       _ => panic!("not implemented mov_x")
     }
+    // TODO update_negetive_and_zero_flags?
   }
 
   // MOV A, #$00
@@ -136,13 +158,30 @@ impl APU {
       }
       _ => panic!("not implemented mov_a")
     }
+    self.update_negative_and_zero_flags(self.get_register_a());
   }
 
   // MOV (X),A
-  fn move_ix(&mut self, mode: &AddressingMode) {
+  fn mov_ix(&mut self, mode: &AddressingMode) {
     match mode {
       AddressingMode::RegisterA => {
         self.mem_write(self.get_register_x() as u16, self.get_register_a());
+        self.update_negative_and_zero_flags(self.get_register_a());
+      }
+      _ => panic!("not implemented mov_a")
+    }
+  }
+
+  // MOV $F4,#$AA
+  fn mov_m(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::Immediate => {
+        let dest = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        let data = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+        self.mem_write(dest as u16, data);
+        self.update_negative_and_zero_flags(data);
       }
       _ => panic!("not implemented mov_a")
     }
@@ -154,6 +193,7 @@ impl APU {
       AddressingMode::RegisterX => {
         let x = self.get_register_x().wrapping_sub(1);
         self.set_register_x(x);
+        self.update_negative_and_zero_flags(self.get_register_x());
       }
       _ => panic!("not implemented mov_a")
     }
@@ -163,11 +203,64 @@ impl APU {
   fn bne(&mut self) {
     let v = self.mem_read(self.program_counter) as i8;
     self.program_counter += 1;
+
+    if (self.status & FLAG_ZERO) != 0 {
+      return
+    }
+
     self.program_counter = if v < 0 {
       self.program_counter.wrapping_sub(v.abs() as u16)
     } else {
       self.program_counter.wrapping_add(v as u16)
     };
+  }
+
+  // BRA Start
+  fn bra(&mut self) {
+    let v = self.mem_read(self.program_counter) as i8;
+    self.program_counter += 1;
+    self.program_counter = if v < 0 {
+      self.program_counter.wrapping_sub(v.abs() as u16)
+    } else {
+      self.program_counter.wrapping_add(v as u16)
+    };
+  }
+
+  // CMP $F4,#$CC
+  fn cmp_m(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::Immediate => {
+        let dest = self.mem_read(self.program_counter);
+        let left = self.mem_read(dest as u16);
+        self.program_counter += 1;
+        let right = self.mem_read(self.program_counter);
+        self.program_counter += 1;
+
+        // N、Z、Cフラグが変更されます。
+        let (v, c) = right.overflowing_sub(left);
+        self.status = if c {
+          self.status | FLAG_CARRY
+        } else {
+          self.status & !FLAG_CARRY
+        };
+        self.update_negative_and_zero_flags(v);
+      }
+      _ => panic!("not implemented mov_a")
+    }
+  }
+
+  fn update_negative_and_zero_flags(&mut self, result: u8) {
+    let test_bit = 0x80;
+    self.status = if result == 0 {
+        self.status | FLAG_ZERO
+    } else {
+        self.status & !FLAG_ZERO
+    };
+    self.status = if (result & test_bit) != 0 {
+        self.status | FLAG_NEGATIVE
+    } else {
+        self.status & !FLAG_NEGATIVE
+    }
   }
 
   fn get_register_a(&self) -> u8 {
