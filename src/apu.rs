@@ -12,7 +12,7 @@ const FLAG_CARRY: u8 = 1 << 0;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
-enum AddressingMode {
+pub enum AddressingMode {
   Immediate,
   RegisterA,
   RegisterX,
@@ -22,14 +22,14 @@ enum AddressingMode {
 
 pub struct APU {
   // FIXME あとでけす
-  status: u8,
+  pub status: u8,
   counter: u32,
 
-  program_counter: u16,
+  pub program_counter: u16,
   ya: u16,
   x: u8,
-  stack_pointer: u8,
-  program_status: u8,
+  pub stack_pointer: u8,
+  pub program_status: u8,
   memory: Vec<u8>,
 }
 
@@ -52,7 +52,7 @@ impl APU {
     // FIXME
   }
 
-  fn run(&mut self) {
+  pub fn run(&mut self) {
     let op = self.memory[self.program_counter as usize];
     self.program_counter += 1;
     match op {
@@ -115,12 +115,13 @@ impl APU {
   fn mov_x(&mut self, mode: &AddressingMode) {
     match mode {
       AddressingMode::Immediate => {
-        self.x = self.mem_read(self.program_counter);
+        let x = self.mem_read(self.program_counter);
+        self.set_register_x(x);
         self.program_counter += 1;
       }
       _ => panic!("not implemented mov_x")
     }
-    self.update_negative_and_zero_flags(self.x);
+    self.update_negative_and_zero_flags(self.get_register_x());
   }
 
   // MOV Y,$F4
@@ -204,7 +205,7 @@ impl APU {
     let v = self.mem_read(self.program_counter) as i8;
     self.program_counter += 1;
 
-    if (self.status & FLAG_ZERO) != 0 {
+    if (self.program_status & FLAG_ZERO) != 0 {
       return
     }
 
@@ -251,47 +252,47 @@ impl APU {
 
   fn update_negative_and_zero_flags(&mut self, result: u8) {
     let test_bit = 0x80;
-    self.status = if result == 0 {
-        self.status | FLAG_ZERO
+    self.program_status = if result == 0 {
+        self.program_status | FLAG_ZERO
     } else {
-        self.status & !FLAG_ZERO
+        self.program_status & !FLAG_ZERO
     };
-    self.status = if (result & test_bit) != 0 {
-        self.status | FLAG_NEGATIVE
+    self.program_status = if (result & test_bit) != 0 {
+        self.program_status | FLAG_NEGATIVE
     } else {
-        self.status & !FLAG_NEGATIVE
+        self.program_status & !FLAG_NEGATIVE
     }
   }
 
-  fn get_register_a(&self) -> u8 {
+  pub fn get_register_a(&self) -> u8 {
     (self.ya & 0x00FF) as u8
   }
 
-  fn set_register_a(&mut self, value: u8) {
+  pub fn set_register_a(&mut self, value: u8) {
     self.ya = (self.ya & 0xFF00) | (value as u16)
   }
 
-  fn get_register_y(&self) -> u8 {
+  pub fn get_register_y(&self) -> u8 {
     (self.ya >> 8) as u8
   }
 
-  fn set_register_y(&mut self, value: u8) {
+  pub fn set_register_y(&mut self, value: u8) {
     self.ya = (self.ya & 0x00FF) | ((value as u16) << 8)
   }
 
-  fn get_register_x(&self) -> u8 {
+  pub fn get_register_x(&self) -> u8 {
     self.x
   }
 
-  fn set_register_x(&mut self, value: u8) {
+  pub fn set_register_x(&mut self, value: u8) {
     self.x = value
   }
 
-  fn mem_read(&mut self, addr: u16) -> u8 {
+  pub fn mem_read(&mut self, addr: u16) -> u8 {
     self.memory[addr as usize]
   }
 
-  fn mem_write(&mut self, addr: u16, data: u8) {
+  pub fn mem_write(&mut self, addr: u16, data: u8) {
     self.memory[addr as usize] = data;
   }
 

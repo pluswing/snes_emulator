@@ -17,6 +17,9 @@ name = "main"
 path = "src/main.rs"
 
 [[bin]]
-name = "test"
+name = "cpu_test"
 path = "src/cpu_test.rs"
 
+[[bin]]
+name = "apu_test"
+path = "src/apu_test.rs"
