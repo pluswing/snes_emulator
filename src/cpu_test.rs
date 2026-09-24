@@ -136,7 +136,7 @@ fn main() {
     // let targets = testcases();
 
     for target in targets {
-      let input_fn = fs::read_to_string(format!("tests/cases/{}.json", target)).expect("JSON Read Failed.");
+      let input_fn = fs::read_to_string(format!("tests/cpu_cases/{}.json", target)).expect("JSON Read Failed.");
       let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
 
       let mut cpu = CPU::new();

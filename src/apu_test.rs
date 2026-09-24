@@ -86,7 +86,17 @@ struct TestCaseData {
 
 fn main() {
     let targets = [
-      "cd"
+      "00",
+      "cd",
+      "bd",
+      "e8",
+      "c6",
+      "1d",
+      "d0",
+      "8f",
+      "78",
+      "2f",
+      "eb",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
@@ -112,8 +122,8 @@ fn main() {
 
         // cpuを1命令分動かす（？）
         let opcode = apu.mem_read(apu.program_counter);
-        let arg1 = apu.mem_read(apu.program_counter+1);
-        let arg2 = apu.mem_read(apu.program_counter+2);
+        let arg1 = apu.mem_read(apu.program_counter.wrapping_add(1));
+        let arg2 = apu.mem_read(apu.program_counter.wrapping_add(2));
         println!("---------------------");
         println!("RUN name: \"{}\" {:02X} {:02X} {:02X}", data.name, opcode, arg1, arg2);
         // println!("cycles:");
@@ -124,8 +134,8 @@ fn main() {
         //     print!("{:06X} __ {}, ", c.0, c.2)
         //   }
         // }
-        println!("initial:                         NVMXDIZC\n{:?}", data.Initial);
-        println!("expected:                        NVMXDIZC\n{:?}", data.Final);
+        println!("initial:                         NVD-H-ZC\n{:?}", data.Initial);
+        println!("expected:                        NVD-H-ZC\n{:?}", data.Final);
         apu.run();
         // println!("A initial: {:04X}, expected: {:04X}, actual: {:04X}", data.Initial.A, data.Final.A, cpu.register_a);
 
