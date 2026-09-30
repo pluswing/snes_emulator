@@ -1,3 +1,4 @@
+use core::panic;
 use std::ops::Add;
 
 
@@ -28,6 +29,13 @@ pub struct APU {
   pub stack_pointer: u8,
   pub program_status: u8,
   memory: Vec<u8>,
+
+  // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0
+  // 2141h RW - APUI01  - Main CPU to Sound CPU Communication Port 1
+  // 2142h RW - APUI02  - Main CPU to Sound CPU Communication Port 2
+  // 2143h RW - APUI03  - Main CPU to Sound CPU Communication Port 3
+  input: [u8; 4],
+  output: [u8; 4],
 }
 
 impl APU {
@@ -39,6 +47,8 @@ impl APU {
       stack_pointer: 0,
       program_status: 0,
       memory: vec![0; 0x10000],
+      input: [0x00; 4],
+      output: [0x00; 4],
     }
   }
 
@@ -91,7 +101,7 @@ impl APU {
   -$D0 $0B -> BNE +
   -$E4 $F5 -> MOV A,$F5
   -$CB $F4 -> MOV $F4,Y
-  $D7 $00 -> MOV [$00]+Y,A
+  -$D7 $00 -> MOV [$00]+Y,A
   $FC -> INC Y
   $D0 $F3 -> BNE -
   $AB $01 -> INC $01
@@ -183,7 +193,7 @@ impl APU {
         let addr = self.mem_read(self.program_counter);
         self.program_counter = self.program_counter.wrapping_add(1);
         let addr = self.direct_page_addr(addr);
-        let addr = self.mem_read(addr) as u16;
+        let addr = self.mem_read_u16(addr) as u16;
         let addr = addr.wrapping_add(self.get_register_y() as u16);
         self.mem_write(addr, self.get_register_a());
       }
@@ -339,40 +349,62 @@ impl APU {
   }
 
   pub fn mem_read(&mut self, addr: u16) -> u8 {
-    self.memory[addr as usize]
+    match addr {
+      0x00F4..=0x00F7 => {
+        let port = (addr - 0x00F4) % 4;
+        self.input[port as usize]
+      }
+      _ => self.memory[addr as usize]
+    }
   }
 
   pub fn mem_write(&mut self, addr: u16, data: u8) {
-    self.memory[addr as usize] = data;
+    match addr {
+      0x00F4..=0x00F7 => {
+        let port = (addr - 0x00F4) % 4;
+        self.output[port as usize] = data
+      }
+      _ => self.memory[addr as usize] = data
+    }
+  }
+
+  pub fn mem_read_u16(&mut self, addr: u16) -> u16 {
+    let lo = self.mem_read(addr) as u16;
+    let addr = (addr & 0xFF00) | ((addr + 1) & 0x00FF);
+    let hi = self.mem_read(addr) as u16;
+    hi << 8 | lo
+  }
+
+  pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
+    self.mem_write(addr, (data & 0x00FF) as u8);
+    let addr = (addr & 0xFF00) | ((addr + 1) & 0x00FF);
+    self.mem_write(addr, (data >> 8) as u8);
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
     println!("APU write({:04X}, {:02X})", addr, data);
     match addr {
-      0x2140 => {
-
+      0x2140..=0x217F => {
+        let port = (addr - 0x2140) % 4;
+        self.input[port as usize] = data;
       }
-      0x2141 => {
-      },
-      0x2142 => {},
-      0x2143 => {},
-      _ => {},
+      _ => panic!("should not reach. APU::write"),
     }
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
     println!("APU read({:04X})", addr);
     match addr {
-      0x2140 => 0xAA,
-      0x2141 => 0xBB,
-      0x2142 => 0x00,
-      0x2143 => 0x00,
-      _ => 0,
+      0x2140..=0x217F => {
+        // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0        (00h/00h)
+        // 2141h RW - APUI01  - Main CPU to Sound CPU Communication Port 1        (00h/00h)
+        // 2142h RW - APUI02  - Main CPU to Sound CPU Communication Port 2        (00h/00h)
+        // 2143h RW - APUI03  - Main CPU to Sound CPU Communication Port 3        (00h/00h)
+        // 2144h..217Fh    - APU Ports 2140-2143h mirrored to 2144h..217Fh
+        let port = (addr - 0x2140) % 4;
+        self.output[port as usize]
+      }
+      _ => panic!("should not reach. APU::read"),
     }
   }
-  // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0        (00h/00h)
-  // 2141h RW - APUI01  - Main CPU to Sound CPU Communication Port 1        (00h/00h)
-  // 2142h RW - APUI02  - Main CPU to Sound CPU Communication Port 2        (00h/00h)
-  // 2143h RW - APUI03  - Main CPU to Sound CPU Communication Port 3        (00h/00h)
-  // 2144h..217Fh    - APU Ports 2140-2143h mirrored to 2144h..217Fh
 }
