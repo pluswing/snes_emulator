@@ -19,9 +19,16 @@ pub enum AddressingMode {
   RegisterX,
   RegisterY,
   RegisterYA,
-  IndirectX,
+  Absolute_Indexed_by_X, // Absolute Indexed by X
   DirectPage,
 }
+
+const BOOTROM: [u8; 64] = [
+  0xCD, 0xEF, 0xBD, 0xE8, 0x00, 0xC6, 0x1D, 0xD0, 0xFC, 0x8F, 0xAA, 0xF4, 0x8F, 0xBB, 0xF5, 0x78,
+  0xCC, 0xF4, 0xD0, 0xFB, 0x2F, 0x19, 0xEB, 0xF4, 0xD0, 0xFC, 0x7E, 0xF4, 0xD0, 0x0B, 0xE4, 0xF5,
+  0xCB, 0xF4, 0xD7, 0x00, 0xFC, 0xD0, 0xF3, 0xAB, 0x01, 0x10, 0xEF, 0x7E, 0xF4, 0x10, 0xEB, 0xBA,
+  0xF6, 0xDA, 0x00, 0xBA, 0xF4, 0xC4, 0xF4, 0xDD, 0x5D, 0xD0, 0xDB, 0x1F, 0x00, 0x00, 0xC0, 0xFF
+];
 
 pub struct APU {
   pub program_counter: u16,
@@ -41,20 +48,27 @@ pub struct APU {
 
 impl APU {
   pub fn new() -> Self {
+
+    let mut memory = vec![0; 0x10000];
+    for (i, data) in BOOTROM.iter().enumerate() {
+      memory[0xFFC0 + i] = *data;
+    }
+
     Self {
       program_counter: 0xFFC0,
       ya: 0,
       x: 0,
       stack_pointer: 0,
       program_status: 0,
-      memory: vec![0; 0x10000],
+      memory,
       input: [0x00; 4],
       output: [0x00; 4],
     }
   }
 
-  fn tick(&mut self, cycles: u32) {
-    // FIXME
+  pub fn tick(&mut self, cycles: u32) {
+    // FIXME cyclesを考慮
+    self.run()
   }
 
   pub fn run(&mut self) {
@@ -81,6 +95,10 @@ impl APU {
       0x10 => self.bpl(),
       0xBA => self.movw(&AddressingMode::RegisterYA, &AddressingMode::DirectPage),
       0xDA => self.movw(&AddressingMode::DirectPage, &AddressingMode::RegisterYA),
+      0xC4 => self.mov_m(&AddressingMode::RegisterA),
+      0xDD => self.mov(&AddressingMode::RegisterA, &AddressingMode::RegisterY),
+      0x5D => self.mov(&AddressingMode::RegisterX, &AddressingMode::RegisterA),
+      0x1F => self.jmp(&AddressingMode::Absolute_Indexed_by_X),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -117,11 +135,11 @@ impl APU {
   -$BA $F6 -> MOVW YA,$F6
   -$DA $00 -> MOVW $00,YA
   -$BA $F4 -> MOVW YA,$F4
-  $C4 $F4 -> MOV $F4,A
-  $DD -> MOV A,Y
-  $5D -> MOV X,A
-  $D0 $DB -> BNE Trans
-  $1F $00 $00 -> JMP [$0000+X]
+  -$C4 $F4 -> MOV $F4,A
+  -$DD -> MOV A,Y
+  -$5D -> MOV X,A
+  -$D0 $DB -> BNE Trans
+  -$1F $00 $00 -> JMP [$0000+X]
   $C0 $FF -> .DW $FFC0
   */
 
@@ -225,7 +243,38 @@ impl APU {
         self.inc_program_counter();
         self.mem_write(dest as u16, self.get_register_y());
       }
+      AddressingMode::RegisterA => {
+        let dest = self.mem_read(self.program_counter);
+        let dest = self.direct_page_addr(dest);
+        self.inc_program_counter();
+        self.mem_write(dest as u16, self.get_register_a());
+      }
       _ => panic!("not implemented mov_m")
+    }
+  }
+
+  // MOV A,Y
+  // MOV X,A
+  fn mov(&mut self, dest: &AddressingMode, src: &AddressingMode) {
+    let data = match src {
+      AddressingMode::RegisterY => {
+        self.get_register_y()
+      }
+      AddressingMode::RegisterA => {
+        self.get_register_a()
+      }
+      _ => panic!("not implemented mov")
+    };
+    match dest {
+      AddressingMode::RegisterA => {
+        self.set_register_a(data);
+        self.update_negative_and_zero_flags(data);
+      }
+      AddressingMode::RegisterX => {
+        self.set_register_x(data);
+        self.update_negative_and_zero_flags(data);
+      }
+      _ => panic!("not implemented mov")
     }
   }
 
@@ -373,6 +422,20 @@ impl APU {
     }
   }
 
+  // JMP [$0000+X]
+  fn jmp(&mut self, mode: &AddressingMode) {
+    match mode {
+      AddressingMode::Absolute_Indexed_by_X => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        let x = self.get_register_x();
+        let addr = addr.wrapping_add(x as u16);
+        let addr = self.mem_read_u16_no_wrapped(addr);
+        self.program_counter = addr;
+      }
+      _ => panic!("not implemented jmp")
+    }
+  }
+
   fn inc_program_counter(&mut self) {
     self.program_counter = self.program_counter.wrapping_add(1);
   }
@@ -439,22 +502,20 @@ impl APU {
 
   pub fn mem_read(&mut self, addr: u16) -> u8 {
     match addr {
-      // FIXME for test
-      // 0x00F4..=0x00F7 => {
-      //   let port = (addr - 0x00F4) % 4;
-      //   self.input[port as usize]
-      // }
+      0x00F4..=0x00F7 => {
+        let port = (addr - 0x00F4) % 4;
+        self.input[port as usize]
+      }
       _ => self.memory[addr as usize]
     }
   }
 
   pub fn mem_write(&mut self, addr: u16, data: u8) {
     match addr {
-      // FIXME for test
-      // 0x00F4..=0x00F7 => {
-      //   let port = (addr - 0x00F4) % 4;
-      //   self.output[port as usize] = data
-      // }
+      0x00F4..=0x00F7 => {
+        let port = (addr - 0x00F4) % 4;
+        self.output[port as usize] = data
+      }
       _ => self.memory[addr as usize] = data
     }
   }
@@ -462,6 +523,13 @@ impl APU {
   pub fn mem_read_u16(&mut self, addr: u16) -> u16 {
     let lo = self.mem_read(addr) as u16;
     let addr = (addr & 0xFF00) | ((addr + 1) & 0x00FF);
+    let hi = self.mem_read(addr) as u16;
+    hi << 8 | lo
+  }
+
+  pub fn mem_read_u16_no_wrapped(&mut self, addr: u16) -> u16 {
+    let lo = self.mem_read(addr) as u16;
+    let addr = addr.wrapping_add(1);
     let hi = self.mem_read(addr) as u16;
     hi << 8 | lo
   }

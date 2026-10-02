@@ -119,6 +119,7 @@ impl Bus {
 
   pub fn tick(&mut self) {
     self.ppu.tick(self.cycles);
+    self.apu.tick(self.cycles);
     self.hdma_transfer();
     self.cycles = 0;
   }
