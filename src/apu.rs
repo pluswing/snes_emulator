@@ -68,12 +68,13 @@ impl APU {
 
   pub fn tick(&mut self, cycles: u32) {
     // FIXME cyclesを考慮
-    self.run()
+    self.run();
   }
 
   pub fn run(&mut self) {
     let op = self.memory[self.program_counter as usize];
     self.inc_program_counter();
+    println!("APU run OP: {:04X}", op);
     match op {
       0x00 => self.nop(),
       0xCD => self.mov_x(&AddressingMode::Immediate),
@@ -561,6 +562,7 @@ impl APU {
         // 2143h RW - APUI03  - Main CPU to Sound CPU Communication Port 3        (00h/00h)
         // 2144h..217Fh    - APU Ports 2140-2143h mirrored to 2144h..217Fh
         let port = (addr - 0x2140) % 4;
+        println!("  {:02X} => {:02X}", port, self.output[port as usize]);
         self.output[port as usize]
       }
       _ => panic!("should not reach. APU::read"),
