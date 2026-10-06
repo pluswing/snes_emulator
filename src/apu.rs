@@ -21,6 +21,7 @@ pub enum AddressingMode {
   RegisterYA,
   Absolute_Indexed_by_X, // Absolute Indexed by X
   DirectPage,
+  Absolute,
 }
 
 const BOOTROM: [u8; 64] = [
@@ -100,6 +101,9 @@ impl APU {
       0xDD => self.mov(&AddressingMode::RegisterA, &AddressingMode::RegisterY),
       0x5D => self.mov(&AddressingMode::RegisterX, &AddressingMode::RegisterA),
       0x1F => self.jmp(&AddressingMode::Absolute_Indexed_by_X),
+
+      0x5F => self.jmp(&AddressingMode::Absolute),
+      // 0xC0 => self.di(),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -175,7 +179,7 @@ impl APU {
   fn mov_sp(&mut self, mode: &AddressingMode) {
     match mode {
       AddressingMode::RegisterX => {
-        self.stack_pointer = self.get_register_x();
+        self.set_stack_pointer(self.get_register_x());
       }
       _ => panic!("not implemented mov_sp")
     }
@@ -433,6 +437,10 @@ impl APU {
         let addr = self.mem_read_u16_no_wrapped(addr);
         self.program_counter = addr;
       }
+      AddressingMode::Absolute => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        self.program_counter = addr;
+      }
       _ => panic!("not implemented jmp")
     }
   }
@@ -501,6 +509,14 @@ impl APU {
     self.x = value
   }
 
+  pub fn get_stack_pointer(&self) -> u16 {
+    0x0100 & self.stack_pointer as u16
+  }
+
+  pub fn set_stack_pointer(&mut self, value: u8) {
+    self.stack_pointer = value
+  }
+
   pub fn mem_read(&mut self, addr: u16) -> u8 {
     match addr {
       0x00F4..=0x00F7 => {
@@ -513,9 +529,35 @@ impl APU {
 
   pub fn mem_write(&mut self, addr: u16, data: u8) {
     match addr {
+      0x00F0 => {
+        // 0x00F0	TEST	テスト機能
+      }
+      0x00F1 => {
+        // 0x00F1	CONTROL	I/Oとタイマーの調整
+        if (data & 0x10) != 0 {
+          // 1 を書き込んだ時、入力ポートの 0x00F4 と 0x00F5 が 0x00 にクリアされます。
+          //self.mem_write(0x00F4, 0);
+          //self.mem_write(0x00F5, 0);
+        }
+        if (data & 0x20) != 0 {
+          // 1 を書き込んだ時、入力ポートの 0x00F6 と 0x00F7 が 0x00 にクリアされます。
+          //self.mem_write(0x00F6, 0);
+          //self.mem_write(0x00F7, 0);
+        }
+      }
+      0x00F2..=0x00F3 => {
+
+        // 0x00F2	DSPADDR	DSP通信アドレス
+        // 0x00F3	DSPDATA	DSP通信データ
+        println!("APU mem_write({:04X}, {:02X})", addr, data)
+      }
       0x00F4..=0x00F7 => {
         let port = (addr - 0x00F4) % 4;
         self.output[port as usize] = data
+      }
+      0x00FA..=0x00FF => {
+        // タイマー関連
+        println!("APU mem_write({:04X}, {:02X})", addr, data)
       }
       _ => self.memory[addr as usize] = data
     }
@@ -542,7 +584,7 @@ impl APU {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
-    println!("APU write({:04X}, {:02X})", addr, data);
+    println!("APU write FROM CPU({:04X}, {:02X})", addr, data);
     match addr {
       0x2140..=0x217F => {
         let port = (addr - 0x2140) % 4;
@@ -553,7 +595,7 @@ impl APU {
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
-    println!("APU read({:04X})", addr);
+    println!("APU read FROM CPU({:04X})", addr);
     match addr {
       0x2140..=0x217F => {
         // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0        (00h/00h)
