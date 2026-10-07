@@ -7,7 +7,7 @@ const FLAG_OVERFLOW: u8 = 1 << 6;
 const FLAG_DIRECT_PAGE: u8 = 1 << 5;
 // 4 なし
 const FLAG_HALF_CARRY: u8 = 1 << 3;
-// 2 なし
+const FLAG_INTERRRUPT: u8 = 1 << 2;
 const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
 
@@ -45,10 +45,20 @@ pub struct APU {
   // 2143h RW - APUI03  - Main CPU to Sound CPU Communication Port 3
   input: [u8; 4],
   output: [u8; 4],
+
+  unit_test_mode: bool,
 }
 
 impl APU {
+  pub fn unit_test() -> Self {
+    Self::_new(true)
+  }
+
   pub fn new() -> Self {
+    Self::_new(false)
+  }
+
+  fn _new(unit_test_mode: bool) -> Self {
 
     let mut memory = vec![0; 0x10000];
     for (i, data) in BOOTROM.iter().enumerate() {
@@ -64,6 +74,7 @@ impl APU {
       memory,
       input: [0x00; 4],
       output: [0x00; 4],
+      unit_test_mode,
     }
   }
 
@@ -103,9 +114,38 @@ impl APU {
       0x1F => self.jmp(&AddressingMode::Absolute_Indexed_by_X),
 
       0x5F => self.jmp(&AddressingMode::Absolute),
-      // 0xC0 => self.di(),
+      0xC0 => self.di(),
+      0x3F => self.call(),
+      0x6F => self.ret(),
+      0x20 => self.clrp(),
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  fn clrp(&mut self) {
+    self.program_status = self.program_status & !FLAG_DIRECT_PAGE;
+  }
+
+  fn call(&mut self) {
+    let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+    self.inc_program_counter();
+    self.inc_program_counter();
+
+    let lo = (self.program_counter & 0x00FF) as u8;
+    let hi = ((self.program_counter & 0xFF00) >> 8) as u8;
+    self._push(hi);
+    self._push(lo);
+    self.program_counter = addr;
+  }
+
+  fn ret(&mut self) {
+    let lo = self._pop() as u16;
+    let hi = self._pop() as u16;
+    self.program_counter = hi << 8 | lo;
+  }
+
+  fn di(&mut self) {
+    self.program_status = self.program_status & !FLAG_INTERRRUPT;
   }
 
   fn nop(&self) {
@@ -510,14 +550,30 @@ impl APU {
   }
 
   pub fn get_stack_pointer(&self) -> u16 {
-    0x0100 & self.stack_pointer as u16
+    0x0100 | self.stack_pointer as u16
   }
 
   pub fn set_stack_pointer(&mut self, value: u8) {
     self.stack_pointer = value
   }
 
+  fn _push(&mut self, value: u8) {
+    self.mem_write(self.get_stack_pointer(), value);
+    self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+  }
+
+  fn _pop(&mut self) -> u8 {
+    self.stack_pointer = self.stack_pointer.wrapping_add(1);
+    let addr = self.get_stack_pointer();
+    let value = self.mem_read(addr);
+    value
+  }
+
   pub fn mem_read(&mut self, addr: u16) -> u8 {
+    if self.unit_test_mode {
+      return self.memory[addr as usize];
+    }
+
     match addr {
       0x00F4..=0x00F7 => {
         let port = (addr - 0x00F4) % 4;
@@ -528,6 +584,11 @@ impl APU {
   }
 
   pub fn mem_write(&mut self, addr: u16, data: u8) {
+    if self.unit_test_mode {
+      self.memory[addr as usize] = data;
+      return
+    }
+
     match addr {
       0x00F0 => {
         // 0x00F0	TEST	テスト機能

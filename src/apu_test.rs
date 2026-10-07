@@ -111,6 +111,10 @@ fn main() {
       "5d",
       "1f",
       "5f",
+      "c0",
+      "3f",
+      "6f",
+      "20",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
@@ -120,7 +124,7 @@ fn main() {
       let input_fn = fs::read_to_string(format!("tests/apu_cases/{}.json", target)).expect("JSON Read Failed.");
       let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
 
-      let mut apu = APU::new();
+      let mut apu = APU::unit_test();
 
       for data in &deserialized {
         // apuにInitialをセット
