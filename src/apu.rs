@@ -118,6 +118,7 @@ impl APU {
       0x3F => self.call(),
       0x6F => self.ret(),
       0x20 => self.clrp(),
+      // 0xF5 => {} // TODO MOV (Absolute Indexed by X)
       _ => panic!("not implement op: {:02X}", op)
     }
   }
