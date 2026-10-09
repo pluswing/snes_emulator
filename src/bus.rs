@@ -448,7 +448,7 @@ impl Mem for Bus {
           0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
           0x6000..=0x7FFF => {
             // FIXME カートリッジ 予約済み領域
-            0xFF
+            0x00 // FIXME 何が返るのが正解？
           }
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
@@ -508,7 +508,11 @@ impl Mem for Bus {
           0x4300..=0x437F => {
             self.write_dma_registers(addr, data);
           }
-          // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
+          0x6000..=0x7FFF => {
+            // TODO 予約済み領域
+            panic!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+          }
+          0x8000..=0xFFFF => self.cartridge.write(bank, addr, data),
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
         }
       }

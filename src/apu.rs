@@ -118,7 +118,8 @@ impl APU {
       0x3F => self.call(),
       0x6F => self.ret(),
       0x20 => self.clrp(),
-      // 0xF5 => {} // TODO MOV (Absolute Indexed by X)
+      0xF5 => self.mov(&AddressingMode::RegisterA,  &AddressingMode::Absolute_Indexed_by_X),
+      0xF0 => self.beq(),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -309,6 +310,14 @@ impl APU {
       AddressingMode::RegisterA => {
         self.get_register_a()
       }
+      AddressingMode::Absolute_Indexed_by_X => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        self.inc_program_counter();
+        self.inc_program_counter();
+        let addr = addr.wrapping_add(self.get_register_x() as u16);
+        let data = self.mem_read(addr);
+        data
+      }
       _ => panic!("not implemented mov")
     };
     match dest {
@@ -418,6 +427,18 @@ impl APU {
     self.inc_program_counter();
 
     if (self.program_status & FLAG_NEGATIVE) != 0 {
+      return
+    }
+    self.program_counter = self.program_counter.wrapping_add(v)
+  }
+
+  fn beq(&mut self) {
+    let v = self.mem_read(self.program_counter) as i8;
+    let v = v as i16;
+    let v = v as u16;
+    self.inc_program_counter();
+
+    if (self.program_status & FLAG_ZERO) == 0 {
       return
     }
     self.program_counter = self.program_counter.wrapping_add(v)

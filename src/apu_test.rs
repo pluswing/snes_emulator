@@ -115,6 +115,8 @@ fn main() {
       "3f",
       "6f",
       "20",
+      "f5",
+      "f0",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);

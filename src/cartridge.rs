@@ -39,6 +39,9 @@ impl Cartridge {
       0x0 => {
         // LoROM/32K Banks             Mode 20 (LoROM)
         match bank {
+          0x00..=0x2F => {
+            panic!("write ROM: {:02X}:{:04X}", bank, addr)
+          }
           0x70..=0x7D => {
             match addr {
               0x0000..=0x7FFF => {
