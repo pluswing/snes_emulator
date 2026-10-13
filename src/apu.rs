@@ -22,6 +22,7 @@ pub enum AddressingMode {
   Absolute_Indexed_by_X, // Absolute Indexed by X
   DirectPage,
   Absolute,
+  RegisterX_DP_INC,
 }
 
 const BOOTROM: [u8; 64] = [
@@ -120,6 +121,9 @@ impl APU {
       0x20 => self.clrp(),
       0xF5 => self.mov(&AddressingMode::RegisterA,  &AddressingMode::Absolute_Indexed_by_X),
       0xF0 => self.beq(),
+      0x3D => self.inc(&AddressingMode::RegisterX),
+      0xAF => self.mov(&AddressingMode::RegisterX_DP_INC, &AddressingMode::RegisterA),
+      0xC8 => self.cmp(&AddressingMode::RegisterX, &AddressingMode::DirectPage),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -329,6 +333,12 @@ impl APU {
         self.set_register_x(data);
         self.update_negative_and_zero_flags(data);
       }
+      // MOV "(X)+", A
+      AddressingMode::RegisterX_DP_INC => {
+        let addr = self.direct_page_addr(self.get_register_x());
+        self.mem_write(addr, data);
+        self.set_register_x(self.get_register_x().wrapping_add(1));
+      }
       _ => panic!("not implemented mov")
     }
   }
@@ -383,6 +393,11 @@ impl APU {
         let y = self.get_register_y().wrapping_add(1);
         self.set_register_y(y);
         self.update_negative_and_zero_flags(y);
+      }
+      AddressingMode::RegisterX => {
+        let x = self.get_register_x().wrapping_add(1);
+        self.set_register_x(x);
+        self.update_negative_and_zero_flags(x);
       }
       AddressingMode::DirectPage => {
         let addr = self.mem_read(self.program_counter);
@@ -487,6 +502,32 @@ impl APU {
       }
       _ => panic!("not implemented cmp_y")
     }
+  }
+
+  fn cmp(&mut self, left: &AddressingMode, right: &AddressingMode) {
+    // CMP X, dp
+    let left = match left {
+      AddressingMode::RegisterX => {
+        self.get_register_x()
+      }
+      _ => panic!("not implemented cmp")
+    };
+    let right = match right {
+      AddressingMode::DirectPage => {
+        let dest = self.mem_read(self.program_counter);
+        let right = self.mem_read(self.direct_page_addr(dest));
+        self.inc_program_counter();
+        right
+      }
+      _ => panic!("not implemented cmp")
+    };
+    let (v, c) = left.overflowing_sub(right);
+    self.program_status = if !c {
+      self.program_status | FLAG_CARRY
+    } else {
+      self.program_status & !FLAG_CARRY
+    };
+    self.update_negative_and_zero_flags(v);
   }
 
   // JMP [$0000+X]
