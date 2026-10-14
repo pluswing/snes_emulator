@@ -23,6 +23,7 @@ pub enum AddressingMode {
   DirectPage,
   Absolute,
   RegisterX_DP_INC,
+  // StackPointer,
 }
 
 const BOOTROM: [u8; 64] = [
@@ -90,7 +91,7 @@ impl APU {
     println!("APU run OP: {:04X}", op);
     match op {
       0x00 => self.nop(),
-      0xCD => self.mov_x(&AddressingMode::Immediate),
+      0xCD => self.mov(&AddressingMode::RegisterX, &AddressingMode::Immediate),
       0xBD => self.mov_sp(&AddressingMode::RegisterX),
       0xE8 => self.mov_a(&AddressingMode::Immediate),
       0xC6 => self.mov_ix(&AddressingMode::RegisterA),
@@ -123,9 +124,16 @@ impl APU {
       0xF0 => self.beq(),
       0x3D => self.inc(&AddressingMode::RegisterX),
       0xAF => self.mov(&AddressingMode::RegisterX_DP_INC, &AddressingMode::RegisterA),
-      0xC8 => self.cmp(&AddressingMode::RegisterX, &AddressingMode::DirectPage),
+      0xC8 => self.cmp(&AddressingMode::RegisterX, &AddressingMode::Immediate),
+      0x90 => self.bcc(),
+      0x40 => self.setp(),
+      0x8D => self.mov(&AddressingMode::RegisterY, &AddressingMode::Immediate),
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  fn setp(&mut self) {
+    self.program_status = self.program_status | FLAG_DIRECT_PAGE;
   }
 
   fn clrp(&mut self) {
@@ -193,19 +201,6 @@ impl APU {
   -$1F $00 $00 -> JMP [$0000+X]
   $C0 $FF -> .DW $FFC0
   */
-
-  // MOV X, #$EF
-  fn mov_x(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::Immediate => {
-        let x = self.mem_read(self.program_counter);
-        self.set_register_x(x);
-        self.inc_program_counter();
-      }
-      _ => panic!("not implemented mov_x")
-    }
-    self.update_negative_and_zero_flags(self.get_register_x());
-  }
 
   // MOV Y,$F4
   fn mov_y(&mut self, mode: &AddressingMode) {
@@ -322,6 +317,11 @@ impl APU {
         let data = self.mem_read(addr);
         data
       }
+      AddressingMode::Immediate => {
+        let data = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        data
+      }
       _ => panic!("not implemented mov")
     };
     match dest {
@@ -331,6 +331,10 @@ impl APU {
       }
       AddressingMode::RegisterX => {
         self.set_register_x(data);
+        self.update_negative_and_zero_flags(data);
+      }
+      AddressingMode::RegisterY => {
+        self.set_register_y(data);
         self.update_negative_and_zero_flags(data);
       }
       // MOV "(X)+", A
@@ -414,46 +418,33 @@ impl APU {
 
   // BNE $FC
   fn bne(&mut self) {
-    let v = self.mem_read(self.program_counter) as i8;
-    let v = v as i16;
-    let v = v as u16;
-    self.inc_program_counter();
-
-    if (self.program_status & FLAG_ZERO) != 0 {
-      return
-    }
-    self.program_counter = self.program_counter.wrapping_add(v)
+    self._jump((self.program_status & FLAG_ZERO) == 0);
   }
 
   // BRA Start
   fn bra(&mut self) {
-    let v = self.mem_read(self.program_counter) as i8;
-    let v = v as i16;
-    let v = v as u16;
-    self.inc_program_counter();
-    self.program_counter = self.program_counter.wrapping_add(v)
+    self._jump(true);
   }
 
   // BPL -
   fn bpl(&mut self) {
-    let v = self.mem_read(self.program_counter) as i8;
-    let v = v as i16;
-    let v = v as u16;
-    self.inc_program_counter();
-
-    if (self.program_status & FLAG_NEGATIVE) != 0 {
-      return
-    }
-    self.program_counter = self.program_counter.wrapping_add(v)
+    self._jump((self.program_status & FLAG_NEGATIVE) == 0);
   }
 
   fn beq(&mut self) {
+    self._jump((self.program_status & FLAG_ZERO) != 0);
+  }
+
+  fn bcc(&mut self) {
+    self._jump((self.program_status & FLAG_CARRY) == 0);
+  }
+
+  fn _jump(&mut self, jump: bool) {
     let v = self.mem_read(self.program_counter) as i8;
     let v = v as i16;
     let v = v as u16;
     self.inc_program_counter();
-
-    if (self.program_status & FLAG_ZERO) == 0 {
+    if !jump {
       return
     }
     self.program_counter = self.program_counter.wrapping_add(v)
@@ -506,21 +497,21 @@ impl APU {
 
   fn cmp(&mut self, left: &AddressingMode, right: &AddressingMode) {
     // CMP X, dp
+    let right = match right {
+      AddressingMode::Immediate => {
+        let right: u8 = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        right
+      }
+      _ => panic!("not implemented cmp")
+    };
     let left = match left {
       AddressingMode::RegisterX => {
         self.get_register_x()
       }
       _ => panic!("not implemented cmp")
     };
-    let right = match right {
-      AddressingMode::DirectPage => {
-        let dest = self.mem_read(self.program_counter);
-        let right = self.mem_read(self.direct_page_addr(dest));
-        self.inc_program_counter();
-        right
-      }
-      _ => panic!("not implemented cmp")
-    };
+    println!("CMP L: {:02X}, R: {:02X}", left, right);
     let (v, c) = left.overflowing_sub(right);
     self.program_status = if !c {
       self.program_status | FLAG_CARRY
@@ -532,20 +523,21 @@ impl APU {
 
   // JMP [$0000+X]
   fn jmp(&mut self, mode: &AddressingMode) {
-    match mode {
+    let addr = match mode {
       AddressingMode::Absolute_Indexed_by_X => {
         let addr = self.mem_read_u16_no_wrapped(self.program_counter);
         let x = self.get_register_x();
         let addr = addr.wrapping_add(x as u16);
         let addr = self.mem_read_u16_no_wrapped(addr);
-        self.program_counter = addr;
+        addr
       }
       AddressingMode::Absolute => {
         let addr = self.mem_read_u16_no_wrapped(self.program_counter);
-        self.program_counter = addr;
+        addr
       }
       _ => panic!("not implemented jmp")
-    }
+    };
+    self.program_counter = addr;
   }
 
   fn inc_program_counter(&mut self) {

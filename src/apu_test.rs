@@ -120,6 +120,9 @@ fn main() {
       "3d",
       "af",
       "c8",
+      "90",
+      "40",
+      "8d",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
