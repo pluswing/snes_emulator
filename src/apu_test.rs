@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::fs;
 use std::fmt;
 
-use crate::apu::{AddressingMode, APU};
+use crate::apu::{Args, APU};
 
 mod apu;
 
@@ -123,9 +123,10 @@ fn main() {
       "90",
       "40",
       "8d",
+      "7d",
     ];
     // let targets = testcases_by_name("MVN");
-    // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
+    // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
     // let targets = testcases();
 
     for target in targets {

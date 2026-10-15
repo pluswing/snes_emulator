@@ -13,7 +13,7 @@ const FLAG_CARRY: u8 = 1 << 0;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
-pub enum AddressingMode {
+pub enum Args {
   Immediate,
   RegisterA,
   RegisterX,
@@ -23,7 +23,9 @@ pub enum AddressingMode {
   DirectPage,
   Absolute,
   RegisterX_DP_INC,
-  // StackPointer,
+  StackPointer,
+  RegisterX_Direct_Page_Indirect,
+  Direct_Page_Indirect_Indexex_by_Y // Direct Page Indirect Indexed by Y
 }
 
 const BOOTROM: [u8; 64] = [
@@ -91,43 +93,44 @@ impl APU {
     println!("APU run OP: {:04X}", op);
     match op {
       0x00 => self.nop(),
-      0xCD => self.mov(&AddressingMode::RegisterX, &AddressingMode::Immediate),
-      0xBD => self.mov_sp(&AddressingMode::RegisterX),
-      0xE8 => self.mov_a(&AddressingMode::Immediate),
-      0xC6 => self.mov_ix(&AddressingMode::RegisterA),
-      0x1D => self.dec(&AddressingMode::RegisterX),
+      0xCD => self.mov(&Args::RegisterX, &Args::Immediate),
+      0xBD => self.mov(&Args::StackPointer, &Args::RegisterX),
+      0xE8 => self.mov(&Args::RegisterA, &Args::Immediate),
+      0xC6 => self.mov(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterA),
+      0x1D => self.dec(&Args::RegisterX),
       0xD0 => self.bne(),
-      0x8F => self.mov_m(&AddressingMode::Immediate),
-      0x78 => self.cmp_m(&AddressingMode::Immediate),
+      0x8F => self.mov(&Args::DirectPage, &Args::Immediate),
+      0x78 => self.cmp(&Args::DirectPage, &Args::Immediate),
       0x2F => self.bra(),
-      0xEB => self.mov_y(&AddressingMode::DirectPage),
-      0x7E => self.cmp_y(&AddressingMode::DirectPage),
-      0xE4 => self.mov_a(&AddressingMode::DirectPage),
-      0xCB => self.mov_m(&AddressingMode::RegisterY),
-      0xD7 => self.mov_imy(&AddressingMode::RegisterA),
-      0xFC => self.inc(&AddressingMode::RegisterY),
-      0xAB => self.inc(&AddressingMode::DirectPage),
+      0xEB => self.mov(&Args::RegisterY, &Args::DirectPage),
+      0x7E => self.cmp(&Args::RegisterY, &Args::DirectPage),
+      0xE4 => self.mov(&Args::RegisterA, &Args::DirectPage),
+      0xCB => self.mov(&Args::DirectPage, &Args::RegisterY),
+      0xD7 => self.mov(&Args::Direct_Page_Indirect_Indexex_by_Y, &Args::RegisterA),
+      0xFC => self.inc(&Args::RegisterY),
+      0xAB => self.inc(&Args::DirectPage),
       0x10 => self.bpl(),
-      0xBA => self.movw(&AddressingMode::RegisterYA, &AddressingMode::DirectPage),
-      0xDA => self.movw(&AddressingMode::DirectPage, &AddressingMode::RegisterYA),
-      0xC4 => self.mov_m(&AddressingMode::RegisterA),
-      0xDD => self.mov(&AddressingMode::RegisterA, &AddressingMode::RegisterY),
-      0x5D => self.mov(&AddressingMode::RegisterX, &AddressingMode::RegisterA),
-      0x1F => self.jmp(&AddressingMode::Absolute_Indexed_by_X),
+      0xBA => self.movw(&Args::RegisterYA, &Args::DirectPage),
+      0xDA => self.movw(&Args::DirectPage, &Args::RegisterYA),
+      0xC4 => self.mov(&Args::DirectPage, &Args::RegisterA),
+      0xDD => self.mov(&Args::RegisterA, &Args::RegisterY),
+      0x5D => self.mov(&Args::RegisterX, &Args::RegisterA),
+      0x1F => self.jmp(&Args::Absolute_Indexed_by_X),
 
-      0x5F => self.jmp(&AddressingMode::Absolute),
+      0x5F => self.jmp(&Args::Absolute),
       0xC0 => self.di(),
       0x3F => self.call(),
       0x6F => self.ret(),
       0x20 => self.clrp(),
-      0xF5 => self.mov(&AddressingMode::RegisterA,  &AddressingMode::Absolute_Indexed_by_X),
+      0xF5 => self.mov(&Args::RegisterA,  &Args::Absolute_Indexed_by_X),
       0xF0 => self.beq(),
-      0x3D => self.inc(&AddressingMode::RegisterX),
-      0xAF => self.mov(&AddressingMode::RegisterX_DP_INC, &AddressingMode::RegisterA),
-      0xC8 => self.cmp(&AddressingMode::RegisterX, &AddressingMode::Immediate),
+      0x3D => self.inc(&Args::RegisterX),
+      0xAF => self.mov(&Args::RegisterX_DP_INC, &Args::RegisterA),
+      0xC8 => self.cmp(&Args::RegisterX, &Args::Immediate),
       0x90 => self.bcc(),
       0x40 => self.setp(),
-      0x8D => self.mov(&AddressingMode::RegisterY, &AddressingMode::Immediate),
+      0x8D => self.mov(&Args::RegisterY, &Args::Immediate),
+      0x7D => self.mov(&Args::RegisterA, &Args::RegisterX),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -202,114 +205,20 @@ impl APU {
   $C0 $FF -> .DW $FFC0
   */
 
-  // MOV Y,$F4
-  fn mov_y(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::DirectPage => {
-        let addr = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        let v = self.mem_read(self.direct_page_addr(addr));
-        self.set_register_y(v);
-      }
-      _ => panic!("not implemented mov_y")
-    }
-    self.update_negative_and_zero_flags(self.get_register_y());
-  }
-
-  // MOV SP, X
-  fn mov_sp(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::RegisterX => {
-        self.set_stack_pointer(self.get_register_x());
-      }
-      _ => panic!("not implemented mov_sp")
-    }
-    // TODO update_negetive_and_zero_flags?
-  }
-
-  // MOV A, #$00
-  fn mov_a(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::Immediate => {
-        let v = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        self.set_register_a(v);
-      }
-      AddressingMode::DirectPage => {
-        let addr = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        let v = self.mem_read(self.direct_page_addr(addr));
-        self.set_register_a(v);
-      }
-      _ => panic!("not implemented mov_a")
-    }
-    self.update_negative_and_zero_flags(self.get_register_a());
-  }
-
-  // MOV (X),A
-  fn mov_ix(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::RegisterA => {
-        let addr = self.direct_page_addr(self.get_register_x());
-        self.mem_write(addr, self.get_register_a());
-      }
-      _ => panic!("not implemented mov_ix")
-    }
-  }
-  // MOV [$00]+Y,A
-  fn mov_imy(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::RegisterA => {
-        let addr = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        let addr = self.direct_page_addr(addr);
-        let addr = self.mem_read_u16(addr) as u16;
-        let addr = addr.wrapping_add(self.get_register_y() as u16);
-        self.mem_write(addr, self.get_register_a());
-      }
-      _ => panic!("not implemented mov_imy")
-    }
-  }
-
-  // MOV $F4,#$AA
-  // MOV $F4,Y
-  fn mov_m(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::Immediate => {
-        let data = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        let dest = self.mem_read(self.program_counter);
-        let dest = self.direct_page_addr(dest);
-        self.inc_program_counter();
-        self.mem_write(dest as u16, data);
-      }
-      AddressingMode::RegisterY => {
-        let dest = self.mem_read(self.program_counter);
-        let dest = self.direct_page_addr(dest);
-        self.inc_program_counter();
-        self.mem_write(dest as u16, self.get_register_y());
-      }
-      AddressingMode::RegisterA => {
-        let dest = self.mem_read(self.program_counter);
-        let dest = self.direct_page_addr(dest);
-        self.inc_program_counter();
-        self.mem_write(dest as u16, self.get_register_a());
-      }
-      _ => panic!("not implemented mov_m")
-    }
-  }
-
   // MOV A,Y
   // MOV X,A
-  fn mov(&mut self, dest: &AddressingMode, src: &AddressingMode) {
+  fn mov(&mut self, dest: &Args, src: &Args) {
     let data = match src {
-      AddressingMode::RegisterY => {
+      Args::RegisterY => {
         self.get_register_y()
       }
-      AddressingMode::RegisterA => {
+      Args::RegisterX => {
+        self.get_register_x()
+      }
+      Args::RegisterA => {
         self.get_register_a()
       }
-      AddressingMode::Absolute_Indexed_by_X => {
+      Args::Absolute_Indexed_by_X => {
         let addr = self.mem_read_u16_no_wrapped(self.program_counter);
         self.inc_program_counter();
         self.inc_program_counter();
@@ -317,57 +226,86 @@ impl APU {
         let data = self.mem_read(addr);
         data
       }
-      AddressingMode::Immediate => {
+      Args::Immediate => {
         let data = self.mem_read(self.program_counter);
         self.inc_program_counter();
+        data
+      }
+      Args::DirectPage => {
+        let addr = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        let data = self.mem_read(self.direct_page_addr(addr));
         data
       }
       _ => panic!("not implemented mov")
     };
     match dest {
-      AddressingMode::RegisterA => {
+      Args::RegisterA => {
         self.set_register_a(data);
         self.update_negative_and_zero_flags(data);
       }
-      AddressingMode::RegisterX => {
+      Args::RegisterX => {
         self.set_register_x(data);
         self.update_negative_and_zero_flags(data);
       }
-      AddressingMode::RegisterY => {
+      Args::RegisterY => {
         self.set_register_y(data);
         self.update_negative_and_zero_flags(data);
       }
       // MOV "(X)+", A
-      AddressingMode::RegisterX_DP_INC => {
+      Args::RegisterX_DP_INC => {
         let addr = self.direct_page_addr(self.get_register_x());
         self.mem_write(addr, data);
         self.set_register_x(self.get_register_x().wrapping_add(1));
+      }
+      // MOV "(X)",A
+      Args::RegisterX_Direct_Page_Indirect => {
+        let addr = self.direct_page_addr(self.get_register_x());
+        self.mem_write(addr, data);
+      }
+      // MOV "[$00]+Y",A
+      Args::Direct_Page_Indirect_Indexex_by_Y => {
+        let addr = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        let addr = self.direct_page_addr(addr);
+        let addr = self.mem_read_u16(addr) as u16;
+        let addr = addr.wrapping_add(self.get_register_y() as u16);
+        self.mem_write(addr, data);
+      }
+      Args::StackPointer => {
+        self.set_stack_pointer(data);
+      }
+      Args::DirectPage => {
+        let dest = self.mem_read(self.program_counter);
+        let dest = self.direct_page_addr(dest);
+        self.inc_program_counter();
+        self.mem_write(dest as u16, data);
       }
       _ => panic!("not implemented mov")
     }
   }
 
   // MOVW YA,$F6
-  fn movw(&mut self, dest: &AddressingMode, src: &AddressingMode) {
+  fn movw(&mut self, dest: &Args, src: &Args) {
     let data = match src {
-      AddressingMode::DirectPage => {
+      Args::DirectPage => {
         let addr = self.mem_read(self.program_counter);
         self.inc_program_counter();
         let addr = self.direct_page_addr(addr);
         let data = self.mem_read_u16(addr);
         data
       }
-      AddressingMode::RegisterYA => {
+      Args::RegisterYA => {
         self.ya
       }
       _ => panic!("not implemented movw")
     };
     match dest {
-      AddressingMode::RegisterYA => {
+      Args::RegisterYA => {
         self.ya = data;
         self.update_negative_and_zero_flags_u16(data);
       }
-      AddressingMode::DirectPage => {
+      Args::DirectPage => {
         let addr = self.mem_read(self.program_counter);
         self.inc_program_counter();
         let addr = self.direct_page_addr(addr);
@@ -378,9 +316,9 @@ impl APU {
   }
 
   // DEC X
-  fn dec(&mut self, mode: &AddressingMode) {
+  fn dec(&mut self, mode: &Args) {
     match mode {
-      AddressingMode::RegisterX => {
+      Args::RegisterX => {
         let x = self.get_register_x().wrapping_sub(1);
         self.set_register_x(x);
         self.update_negative_and_zero_flags(x);
@@ -391,19 +329,19 @@ impl APU {
 
   // INC Y
   // INC $01
-  fn inc(&mut self, mode: &AddressingMode) {
+  fn inc(&mut self, mode: &Args) {
     match mode {
-      AddressingMode::RegisterY => {
+      Args::RegisterY => {
         let y = self.get_register_y().wrapping_add(1);
         self.set_register_y(y);
         self.update_negative_and_zero_flags(y);
       }
-      AddressingMode::RegisterX => {
+      Args::RegisterX => {
         let x = self.get_register_x().wrapping_add(1);
         self.set_register_x(x);
         self.update_negative_and_zero_flags(x);
       }
-      AddressingMode::DirectPage => {
+      Args::DirectPage => {
         let addr = self.mem_read(self.program_counter);
         let addr = self.direct_page_addr(addr);
         self.inc_program_counter();
@@ -450,64 +388,34 @@ impl APU {
     self.program_counter = self.program_counter.wrapping_add(v)
   }
 
-  // CMP $F4,#$CC
-  fn cmp_m(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::Immediate => {
-        let right = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-
-        let dest = self.mem_read(self.program_counter);
-        let left = self.mem_read(self.direct_page_addr(dest));
-        self.inc_program_counter();
-
-        // N、Z、Cフラグが変更されます。
-        let (v, c) = left.overflowing_sub(right);
-        self.program_status = if !c {
-          self.program_status | FLAG_CARRY
-        } else {
-          self.program_status & !FLAG_CARRY
-        };
-        self.update_negative_and_zero_flags(v);
-      }
-      _ => panic!("not implemented cmp_m")
-    }
-  }
-
-  // CMP Y,$F4
-  fn cmp_y(&mut self, mode: &AddressingMode) {
-    match mode {
-      AddressingMode::DirectPage => {
-        let dest = self.mem_read(self.program_counter);
-        let right = self.mem_read(self.direct_page_addr(dest));
-        self.inc_program_counter();
-
-        let left = self.get_register_y();
-        let (v, c) = left.overflowing_sub(right);
-        self.program_status = if !c {
-          self.program_status | FLAG_CARRY
-        } else {
-          self.program_status & !FLAG_CARRY
-        };
-        self.update_negative_and_zero_flags(v);
-      }
-      _ => panic!("not implemented cmp_y")
-    }
-  }
-
-  fn cmp(&mut self, left: &AddressingMode, right: &AddressingMode) {
+  fn cmp(&mut self, left: &Args, right: &Args) {
     // CMP X, dp
     let right = match right {
-      AddressingMode::Immediate => {
+      Args::Immediate => {
         let right: u8 = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        right
+      }
+      Args::DirectPage => {
+        let dest = self.mem_read(self.program_counter);
+        let right = self.mem_read(self.direct_page_addr(dest));
         self.inc_program_counter();
         right
       }
       _ => panic!("not implemented cmp")
     };
     let left = match left {
-      AddressingMode::RegisterX => {
+      Args::RegisterX => {
         self.get_register_x()
+      }
+      Args::RegisterY => {
+        self.get_register_y()
+      }
+      Args::DirectPage => {
+        let dest = self.mem_read(self.program_counter);
+        let left = self.mem_read(self.direct_page_addr(dest));
+        self.inc_program_counter();
+        left
       }
       _ => panic!("not implemented cmp")
     };
@@ -522,16 +430,16 @@ impl APU {
   }
 
   // JMP [$0000+X]
-  fn jmp(&mut self, mode: &AddressingMode) {
+  fn jmp(&mut self, mode: &Args) {
     let addr = match mode {
-      AddressingMode::Absolute_Indexed_by_X => {
+      Args::Absolute_Indexed_by_X => {
         let addr = self.mem_read_u16_no_wrapped(self.program_counter);
         let x = self.get_register_x();
         let addr = addr.wrapping_add(x as u16);
         let addr = self.mem_read_u16_no_wrapped(addr);
         addr
       }
-      AddressingMode::Absolute => {
+      Args::Absolute => {
         let addr = self.mem_read_u16_no_wrapped(self.program_counter);
         addr
       }
