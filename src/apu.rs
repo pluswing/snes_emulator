@@ -25,7 +25,8 @@ pub enum Args {
   RegisterX_DP_INC,
   StackPointer,
   RegisterX_Direct_Page_Indirect,
-  Direct_Page_Indirect_Indexex_by_Y // Direct Page Indirect Indexed by Y
+  Direct_Page_Indirect_Indexex_by_Y, // Direct Page Indirect Indexed by Y
+  Direct_Page_Indexed_Indirect_by_X, // Direct Page Indexed Indirect by X
 }
 
 const BOOTROM: [u8; 64] = [
@@ -131,8 +132,21 @@ impl APU {
       0x40 => self.setp(),
       0x8D => self.mov(&Args::RegisterY, &Args::Immediate),
       0x7D => self.mov(&Args::RegisterA, &Args::RegisterX),
+      0xC7 => self.mov(&Args::Direct_Page_Indexed_Indirect_by_X, &Args::RegisterA),
+      0x3A => self.incw(),
+      // 0x5A => self.cmpw(), // CMPW YA, dp
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  fn incw(&mut self) {
+    let addr = self.mem_read(self.program_counter);
+    self.inc_program_counter();
+    let addr = self.direct_page_addr(addr);
+    let data = self.mem_read_u16(addr);
+    let data = data.wrapping_add(1);
+    self.mem_write_u16(addr, data);
+    self.update_negative_and_zero_flags_u16(data);
   }
 
   fn setp(&mut self) {
@@ -205,10 +219,8 @@ impl APU {
   $C0 $FF -> .DW $FFC0
   */
 
-  // MOV A,Y
-  // MOV X,A
-  fn mov(&mut self, dest: &Args, src: &Args) {
-    let data = match src {
+  fn _get_value(&mut self, arg: &Args) -> u8 {
+    match arg {
       Args::RegisterY => {
         self.get_register_y()
       }
@@ -238,8 +250,11 @@ impl APU {
         data
       }
       _ => panic!("not implemented mov")
-    };
-    match dest {
+    }
+  }
+
+  fn _set_value(&mut self, arg: &Args, data: u8) {
+    match arg {
       Args::RegisterA => {
         self.set_register_a(data);
         self.update_negative_and_zero_flags(data);
@@ -272,6 +287,15 @@ impl APU {
         let addr = addr.wrapping_add(self.get_register_y() as u16);
         self.mem_write(addr, data);
       }
+      // //MOV [dp+X], A
+      Args::Direct_Page_Indexed_Indirect_by_X => {
+        let addr = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        let addr = addr.wrapping_add(self.get_register_x());
+        let addr = self.direct_page_addr(addr);
+        let addr = self.mem_read_u16(addr) as u16;
+        self.mem_write(addr, data);
+      }
       Args::StackPointer => {
         self.set_stack_pointer(data);
       }
@@ -283,6 +307,13 @@ impl APU {
       }
       _ => panic!("not implemented mov")
     }
+  }
+
+  // MOV A,Y
+  // MOV X,A
+  fn mov(&mut self, dest: &Args, src: &Args) {
+    let data = self._get_value(src);
+    self._set_value(dest, data);
   }
 
   // MOVW YA,$F6
@@ -390,36 +421,8 @@ impl APU {
 
   fn cmp(&mut self, left: &Args, right: &Args) {
     // CMP X, dp
-    let right = match right {
-      Args::Immediate => {
-        let right: u8 = self.mem_read(self.program_counter);
-        self.inc_program_counter();
-        right
-      }
-      Args::DirectPage => {
-        let dest = self.mem_read(self.program_counter);
-        let right = self.mem_read(self.direct_page_addr(dest));
-        self.inc_program_counter();
-        right
-      }
-      _ => panic!("not implemented cmp")
-    };
-    let left = match left {
-      Args::RegisterX => {
-        self.get_register_x()
-      }
-      Args::RegisterY => {
-        self.get_register_y()
-      }
-      Args::DirectPage => {
-        let dest = self.mem_read(self.program_counter);
-        let left = self.mem_read(self.direct_page_addr(dest));
-        self.inc_program_counter();
-        left
-      }
-      _ => panic!("not implemented cmp")
-    };
-    println!("CMP L: {:02X}, R: {:02X}", left, right);
+    let right = self._get_value(right);
+    let left = self._get_value(left);
     let (v, c) = left.overflowing_sub(right);
     self.program_status = if !c {
       self.program_status | FLAG_CARRY
