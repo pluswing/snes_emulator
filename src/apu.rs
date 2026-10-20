@@ -1,6 +1,4 @@
 use core::panic;
-use std::ops::Add;
-
 
 const FLAG_NEGATIVE: u8 = 1 << 7;
 const FLAG_OVERFLOW: u8 = 1 << 6;
@@ -10,6 +8,8 @@ const FLAG_HALF_CARRY: u8 = 1 << 3;
 const FLAG_INTERRRUPT: u8 = 1 << 2;
 const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
+
+const SIGN_BIT: u8 = 0x80;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -144,21 +144,41 @@ impl APU {
     }
   }
 
-  fn adc(&mut self, dest: &Args, src: &Args) {
-    let v1 = self._get_value(src);
-    let v2 = self._get_value(dest);
+  pub fn adc(&mut self, dest: &Args, src: &Args) {
+    let value1 = self._get_value(src);
+    let value2 = self._get_value(dest);
+
     let carry = self.program_status & FLAG_CARRY;
-    let (v, carry1) = v1.overflowing_add(v2);
-    let (v, carry2) = v.overflowing_add(carry);
+    let (rhs, carry_flag1) = value1.overflowing_add(carry);
+    let (n, carry_flag2) = value2.overflowing_add(rhs);
 
-    if carry1 || carry2 {
-      self.program_status = self.program_status | FLAG_CARRY;
-    }
-    // TODO HALF CARRY
+    let overflow = (value2 & SIGN_BIT) == (value1 & SIGN_BIT)
+        && (value1 & SIGN_BIT) != (n & SIGN_BIT);
 
-    self.set_register_a(v);
-    self.update_negative_and_zero_flags(v);
-    // self._set_value(dest, data);
+    let half_carry = (value2 & 0x10) == (value1 & 0x10)
+        && (value1 & 0x10) != (n & 0x10);
+
+    // FIXME
+    self.set_register_a(n);
+    // self._set_value(dest, v);
+    println!("ADC: {:02X} + {:02X} => {:02X}", value1, value2, n);
+
+    self.program_status = if carry_flag1 || carry_flag2 {
+        self.program_status | FLAG_CARRY
+    } else {
+        self.program_status & !FLAG_CARRY
+    };
+    self.program_status = if overflow {
+        self.program_status | FLAG_OVERFLOW
+    } else {
+        self.program_status & !FLAG_OVERFLOW
+    };
+    self.program_status = if half_carry || overflow {
+        self.program_status | FLAG_HALF_CARRY
+    } else {
+        self.program_status & !FLAG_HALF_CARRY
+    };
+    self.update_negative_and_zero_flags(n);
   }
 
   // CMPW YA, dp
