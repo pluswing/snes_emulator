@@ -10,6 +10,7 @@ const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
 
 const SIGN_BIT: u8 = 0x80;
+const SIGN_BIT_U16: u16 = 0x8000;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -140,8 +141,42 @@ impl APU {
       0xBC => self.inc(&Args::RegisterA),
       0x60 => self.clrc(),
       0x88 => self.adc(&Args::RegisterA, &Args::Immediate),
+      0x68 => self.cmp(&Args::RegisterA, &Args::Immediate),
+      0xE5 => self.mov(&Args::RegisterA, &Args::Absolute),
+      0xEC => self.mov(&Args::RegisterY, &Args::Absolute),
+      0x9A => self.subw(&Args::RegisterYA, &Args::DirectPage),
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  pub fn subw(&mut self, dest: &Args, src: &Args) {
+    let value1 = self._get_value_u16(src);
+    let value2 = self._get_value_u16(dest);
+    let (value, carry) = value2.overflowing_sub(value1);
+
+    let overflow = (value2 & SIGN_BIT_U16) == (value1 & SIGN_BIT_U16) && (value1 & SIGN_BIT_U16) != (value & SIGN_BIT_U16);
+
+    println!("SUBW {:04X} - {:04X} => {:04X}", value2, value1, value);
+    let half_carry = ((value2 & 0xFF).wrapping_sub(value1 & 0xFF) & 0x0100) != 0;
+    // let half_carry = ((value2 & 0x0F).wrapping_sub(value1 & 0x0F) & 0x10) != 0;
+
+    self.program_status = if !carry {
+        self.program_status | FLAG_CARRY
+    } else {
+        self.program_status & !FLAG_CARRY
+    };
+    self.program_status = if overflow {
+        self.program_status | FLAG_OVERFLOW
+    } else {
+        self.program_status & !FLAG_OVERFLOW
+    };
+    self.program_status = if !half_carry {
+        self.program_status | FLAG_HALF_CARRY
+    } else {
+        self.program_status & !FLAG_HALF_CARRY
+    };
+    self.ya = value;
+    self.update_negative_and_zero_flags_u16(value);
   }
 
   pub fn adc(&mut self, dest: &Args, src: &Args) {
@@ -155,13 +190,11 @@ impl APU {
     let overflow = (value2 & SIGN_BIT) == (value1 & SIGN_BIT)
         && (value1 & SIGN_BIT) != (n & SIGN_BIT);
 
-    let half_carry = (value2 & 0x10) == (value1 & 0x10)
-        && (value1 & 0x10) != (n & 0x10);
+    let half_carry = (((value1 & 0x0F) + (value2 & 0x0F) + carry) & 0x10) != 0;
 
     // FIXME
     self.set_register_a(n);
     // self._set_value(dest, v);
-    println!("ADC: {:02X} + {:02X} => {:02X}", value1, value2, n);
 
     self.program_status = if carry_flag1 || carry_flag2 {
         self.program_status | FLAG_CARRY
@@ -173,7 +206,7 @@ impl APU {
     } else {
         self.program_status & !FLAG_OVERFLOW
     };
-    self.program_status = if half_carry || overflow {
+    self.program_status = if half_carry {
         self.program_status | FLAG_HALF_CARRY
     } else {
         self.program_status & !FLAG_HALF_CARRY
@@ -307,6 +340,13 @@ impl APU {
         let addr = self.mem_read(self.program_counter);
         self.inc_program_counter();
         let data = self.mem_read(self.direct_page_addr(addr));
+        data
+      }
+      Args::Absolute => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        self.inc_program_counter();
+        self.inc_program_counter();
+        let data = self.mem_read(addr);
         data
       }
       _ => panic!("not implemented _get_value")
