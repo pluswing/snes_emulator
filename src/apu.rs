@@ -52,6 +52,8 @@ pub struct APU {
   input: [u8; 4],
   output: [u8; 4],
 
+  disable_inc_pc: bool,
+
   unit_test_mode: bool,
 }
 
@@ -80,6 +82,7 @@ impl APU {
       memory,
       input: [0x00; 4],
       output: [0x00; 4],
+      disable_inc_pc: false,
       unit_test_mode,
     }
   }
@@ -145,20 +148,47 @@ impl APU {
       0xE5 => self.mov(&Args::RegisterA, &Args::Absolute),
       0xEC => self.mov(&Args::RegisterY, &Args::Absolute),
       0x9A => self.subw(&Args::RegisterYA, &Args::DirectPage),
+      0x64 => self.cmp(&Args::RegisterA, &Args::DirectPage),
+      0x65 => self.cmp(&Args::RegisterA, &Args::Absolute),
+      0x44 => self.eor(&Args::RegisterA, &Args::DirectPage),
+      0x28 => self.and(&Args::RegisterA, &Args::Immediate),
+      // 0x30 => self.bmi(),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
 
-  pub fn subw(&mut self, dest: &Args, src: &Args) {
+  fn and(&mut self, left: &Args, right: &Args) {
+    let right = self._get_value(right);
+    self.disable_inc_pc = true;
+    let left_value = self._get_value(left);
+    self.disable_inc_pc = false;
+
+    let value = left_value & right;
+    self._set_value(left, value);
+  }
+
+  fn eor(&mut self, left: &Args, right: &Args) {
+    let right = self._get_value(right);
+    self.disable_inc_pc = true;
+    let left_value = self._get_value(left);
+    self.disable_inc_pc = false;
+
+    let value = left_value ^ right;
+    self._set_value(left, value);
+  }
+
+  fn subw(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value_u16(src);
     let value2 = self._get_value_u16(dest);
     let (value, carry) = value2.overflowing_sub(value1);
 
+    // FIXME overflow がおかしい...
     let overflow = (value2 & SIGN_BIT_U16) == (value1 & SIGN_BIT_U16) && (value1 & SIGN_BIT_U16) != (value & SIGN_BIT_U16);
+    // gameboyはこれっぽい
+    // let (_, overflow) = value1.overflowing_sub(value2);
 
     println!("SUBW {:04X} - {:04X} => {:04X}", value2, value1, value);
-    let half_carry = ((value2 & 0xFF).wrapping_sub(value1 & 0xFF) & 0x0100) != 0;
-    // let half_carry = ((value2 & 0x0F).wrapping_sub(value1 & 0x0F) & 0x10) != 0;
+    let half_carry = (value2 & 0x0FFF) < (value1 & 0x0FFF);
 
     self.program_status = if !carry {
         self.program_status | FLAG_CARRY
@@ -179,7 +209,7 @@ impl APU {
     self.update_negative_and_zero_flags_u16(value);
   }
 
-  pub fn adc(&mut self, dest: &Args, src: &Args) {
+  fn adc(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value(src);
     let value2 = self._get_value(dest);
 
@@ -585,6 +615,9 @@ impl APU {
   }
 
   fn inc_program_counter(&mut self) {
+    if self.disable_inc_pc {
+      return
+    }
     self.program_counter = self.program_counter.wrapping_add(1);
   }
 
