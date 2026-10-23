@@ -152,9 +152,43 @@ impl APU {
       0x65 => self.cmp(&Args::RegisterA, &Args::Absolute),
       0x44 => self.eor(&Args::RegisterA, &Args::DirectPage),
       0x28 => self.and(&Args::RegisterA, &Args::Immediate),
-      // 0x30 => self.bmi(),
+      0x30 => self.bmi(),
+      0xB0 => self.bcs(),
+      0x2D => self.push(&Args::RegisterA),
+      0x1C => self.asl(&Args::RegisterA),
+      0xAE => self.pop(&Args::RegisterA),
+      // 0xC2 => self.set1(6bit)
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  fn asl(&mut self, mode: &Args) {
+    self.disable_inc_pc = true;
+    let value = self._get_value(mode);
+    self.disable_inc_pc = false;
+    let carry = (value & 0x80) != 0;
+    let value = value << 1;
+    self._set_value(mode, value);
+    self._set_status(FLAG_CARRY, carry);
+  }
+
+  fn _set_status(&mut self, flag: u8, value: bool) {
+    self.program_status = if value {
+        self.program_status | flag
+    } else {
+        self.program_status & !flag
+    };
+  }
+
+  fn pop(&mut self, mode: &Args) {
+    let value = self._pop();
+    self.set_register_a(value);
+    // self._set_value(mode, value);
+  }
+
+  fn push(&mut self, mode: &Args) {
+    let value = self._get_value(mode);
+    self._push(value);
   }
 
   fn and(&mut self, left: &Args, right: &Args) {
@@ -190,21 +224,9 @@ impl APU {
     println!("SUBW {:04X} - {:04X} => {:04X}", value2, value1, value);
     let half_carry = (value2 & 0x0FFF) < (value1 & 0x0FFF);
 
-    self.program_status = if !carry {
-        self.program_status | FLAG_CARRY
-    } else {
-        self.program_status & !FLAG_CARRY
-    };
-    self.program_status = if overflow {
-        self.program_status | FLAG_OVERFLOW
-    } else {
-        self.program_status & !FLAG_OVERFLOW
-    };
-    self.program_status = if !half_carry {
-        self.program_status | FLAG_HALF_CARRY
-    } else {
-        self.program_status & !FLAG_HALF_CARRY
-    };
+    self._set_status(FLAG_CARRY, !carry);
+    self._set_status(FLAG_OVERFLOW, overflow);
+    self._set_status(FLAG_HALF_CARRY, !half_carry);
     self.ya = value;
     self.update_negative_and_zero_flags_u16(value);
   }
@@ -226,21 +248,9 @@ impl APU {
     self.set_register_a(n);
     // self._set_value(dest, v);
 
-    self.program_status = if carry_flag1 || carry_flag2 {
-        self.program_status | FLAG_CARRY
-    } else {
-        self.program_status & !FLAG_CARRY
-    };
-    self.program_status = if overflow {
-        self.program_status | FLAG_OVERFLOW
-    } else {
-        self.program_status & !FLAG_OVERFLOW
-    };
-    self.program_status = if half_carry {
-        self.program_status | FLAG_HALF_CARRY
-    } else {
-        self.program_status & !FLAG_HALF_CARRY
-    };
+    self._set_status(FLAG_CARRY, carry_flag1 || carry_flag2);
+    self._set_status(FLAG_OVERFLOW, overflow);
+    self._set_status(FLAG_HALF_CARRY, half_carry);
     self.update_negative_and_zero_flags(n);
   }
 
@@ -248,14 +258,9 @@ impl APU {
   fn cmpw(&mut self, left: &Args, right: &Args) {
     let right = self._get_value_u16(right);
     let left = self._get_value_u16(left);
-    let (v, c) = left.overflowing_sub(right);
-    self.program_status = if !c {
-      self.program_status | FLAG_CARRY
-    } else {
-      self.program_status & !FLAG_CARRY
-    };
-    println!("CMPW VALUE: {:04X}", v);
-    self.update_negative_and_zero_flags_u16(v);
+    let (value, carry) = left.overflowing_sub(right);
+    self._set_status(FLAG_CARRY, !carry);
+    self.update_negative_and_zero_flags_u16(value);
   }
 
   fn incw(&mut self) {
@@ -548,6 +553,14 @@ impl APU {
     }
   }
 
+  fn bcs(&mut self) {
+    self._jump((self.program_status & FLAG_CARRY) != 0);
+  }
+
+  fn bmi(&mut self) {
+    self._jump((self.program_status & FLAG_NEGATIVE) != 0);
+  }
+
   // BNE $FC
   fn bne(&mut self) {
     self._jump((self.program_status & FLAG_ZERO) == 0);
@@ -586,13 +599,9 @@ impl APU {
     // CMP X, dp
     let right = self._get_value(right);
     let left = self._get_value(left);
-    let (v, c) = left.overflowing_sub(right);
-    self.program_status = if !c {
-      self.program_status | FLAG_CARRY
-    } else {
-      self.program_status & !FLAG_CARRY
-    };
-    self.update_negative_and_zero_flags(v);
+    let (value, carry) = left.overflowing_sub(right);
+    self._set_status(FLAG_CARRY, !carry);
+    self.update_negative_and_zero_flags(value);
   }
 
   // JMP [$0000+X]
@@ -631,30 +640,14 @@ impl APU {
 
   fn update_negative_and_zero_flags(&mut self, result: u8) {
     let test_bit = 0x80;
-    self.program_status = if result == 0 {
-        self.program_status | FLAG_ZERO
-    } else {
-        self.program_status & !FLAG_ZERO
-    };
-    self.program_status = if (result & test_bit) != 0 {
-        self.program_status | FLAG_NEGATIVE
-    } else {
-        self.program_status & !FLAG_NEGATIVE
-    }
+    self._set_status(FLAG_ZERO, result == 0);
+    self._set_status(FLAG_NEGATIVE, (result & test_bit) != 0);
   }
 
   fn update_negative_and_zero_flags_u16(&mut self, result: u16) {
     let test_bit = 0x8000;
-    self.program_status = if result == 0 {
-        self.program_status | FLAG_ZERO
-    } else {
-        self.program_status & !FLAG_ZERO
-    };
-    self.program_status = if (result & test_bit) != 0 {
-        self.program_status | FLAG_NEGATIVE
-    } else {
-        self.program_status & !FLAG_NEGATIVE
-    }
+    self._set_status(FLAG_ZERO, result == 0);
+    self._set_status(FLAG_NEGATIVE, (result & test_bit) != 0);
   }
 
   pub fn get_register_a(&self) -> u8 {

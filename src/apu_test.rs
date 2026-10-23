@@ -140,6 +140,11 @@ fn main() {
       "65",
       "44",
       "28",
+      "30",
+      "b0",
+      "2d",
+      "1c",
+      "ae",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
