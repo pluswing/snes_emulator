@@ -52,7 +52,8 @@ pub struct APU {
   input: [u8; 4],
   output: [u8; 4],
 
-  disable_inc_pc: bool,
+  _disable_inc_pc: bool,
+  _disable_update_status: bool,
 
   unit_test_mode: bool,
 }
@@ -82,7 +83,8 @@ impl APU {
       memory,
       input: [0x00; 4],
       output: [0x00; 4],
-      disable_inc_pc: false,
+      _disable_inc_pc: false,
+      _disable_update_status: false,
       unit_test_mode,
     }
   }
@@ -157,15 +159,37 @@ impl APU {
       0x2D => self.push(&Args::RegisterA),
       0x1C => self.asl(&Args::RegisterA),
       0xAE => self.pop(&Args::RegisterA),
-      // 0xC2 => self.set1(6bit)
+      0xC2 => self.set1(op),
+      0x48 => self.eor(&Args::RegisterA, &Args::Immediate),
+      0xB2 => self.clr1(op),
+      0x80 => self.setc(),
+      // 0xA8 => self.sbc(&Args::RegisterA, &Args::Immediate),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
 
+  fn set1(&mut self, op: u8) {
+    let value = self._get_value_without_inc_pc(&Args::DirectPage);
+
+    // オペコードの最上位3ビットによって、そのバイト内のどのビットが設定されるかが決まります。
+    let bit = (op & 0xE0) >> 5;
+    let value = value | (0x01 << bit);
+
+    self._set_value(&Args::DirectPage, value);
+  }
+
+  fn clr1(&mut self, op: u8) {
+    let value = self._get_value_without_inc_pc(&Args::DirectPage);
+
+    // オペコードの最上位3ビットによって、そのバイト内のどのビットがクリアされるかが決まります。
+    let bit = (op & 0xE0) >> 5;
+    let value = value & !(0x01 << bit);
+
+    self._set_value(&Args::DirectPage, value);
+  }
+
   fn asl(&mut self, mode: &Args) {
-    self.disable_inc_pc = true;
-    let value = self._get_value(mode);
-    self.disable_inc_pc = false;
+    let value = self._get_value_without_inc_pc(mode);
     let carry = (value & 0x80) != 0;
     let value = value << 1;
     self._set_value(mode, value);
@@ -182,8 +206,7 @@ impl APU {
 
   fn pop(&mut self, mode: &Args) {
     let value = self._pop();
-    self.set_register_a(value);
-    // self._set_value(mode, value);
+    self._set_value_without_update_status(mode, value);
   }
 
   fn push(&mut self, mode: &Args) {
@@ -193,9 +216,7 @@ impl APU {
 
   fn and(&mut self, left: &Args, right: &Args) {
     let right = self._get_value(right);
-    self.disable_inc_pc = true;
-    let left_value = self._get_value(left);
-    self.disable_inc_pc = false;
+    let left_value = self._get_value_without_inc_pc(left);
 
     let value = left_value & right;
     self._set_value(left, value);
@@ -203,9 +224,7 @@ impl APU {
 
   fn eor(&mut self, left: &Args, right: &Args) {
     let right = self._get_value(right);
-    self.disable_inc_pc = true;
-    let left_value = self._get_value(left);
-    self.disable_inc_pc = false;
+    let left_value = self._get_value_without_inc_pc(left);
 
     let value = left_value ^ right;
     self._set_value(left, value);
@@ -213,27 +232,23 @@ impl APU {
 
   fn subw(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value_u16(src);
-    let value2 = self._get_value_u16(dest);
+    let value2 = self._get_value_u16_without_inc_pc(dest);
     let (value, carry) = value2.overflowing_sub(value1);
 
-    // FIXME overflow がおかしい...
-    let overflow = (value2 & SIGN_BIT_U16) == (value1 & SIGN_BIT_U16) && (value1 & SIGN_BIT_U16) != (value & SIGN_BIT_U16);
-    // gameboyはこれっぽい
-    // let (_, overflow) = value1.overflowing_sub(value2);
+    let overflow = (value2 & SIGN_BIT_U16) != (value1 & SIGN_BIT_U16) && (value2 & SIGN_BIT_U16) != (value & SIGN_BIT_U16);
 
-    println!("SUBW {:04X} - {:04X} => {:04X}", value2, value1, value);
+    // println!("SUBW {:04X} - {:04X} => {:04X}", value2, value1, value);
     let half_carry = (value2 & 0x0FFF) < (value1 & 0x0FFF);
 
     self._set_status(FLAG_CARRY, !carry);
     self._set_status(FLAG_OVERFLOW, overflow);
     self._set_status(FLAG_HALF_CARRY, !half_carry);
-    self.ya = value;
-    self.update_negative_and_zero_flags_u16(value);
-  }
+    self._set_value_u16(dest, value);
+ }
 
   fn adc(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value(src);
-    let value2 = self._get_value(dest);
+    let value2 = self._get_value_without_inc_pc(dest);
 
     let carry = self.program_status & FLAG_CARRY;
     let (rhs, carry_flag1) = value1.overflowing_add(carry);
@@ -244,14 +259,10 @@ impl APU {
 
     let half_carry = (((value1 & 0x0F) + (value2 & 0x0F) + carry) & 0x10) != 0;
 
-    // FIXME
-    self.set_register_a(n);
-    // self._set_value(dest, v);
-
+    self._set_value(dest, n);
     self._set_status(FLAG_CARRY, carry_flag1 || carry_flag2);
     self._set_status(FLAG_OVERFLOW, overflow);
     self._set_status(FLAG_HALF_CARRY, half_carry);
-    self.update_negative_and_zero_flags(n);
   }
 
   // CMPW YA, dp
@@ -271,6 +282,10 @@ impl APU {
     let data = data.wrapping_add(1);
     self.mem_write_u16(addr, data);
     self.update_negative_and_zero_flags_u16(data);
+  }
+
+  fn setc(&mut self) {
+    self.program_status = self.program_status | FLAG_CARRY;
   }
 
   fn setp(&mut self) {
@@ -346,6 +361,19 @@ impl APU {
   -$1F $00 $00 -> JMP [$0000+X]
   $C0 $FF -> .DW $FFC0
   */
+
+  fn _get_value_without_inc_pc(&mut self, arg: &Args) -> u8 {
+    self._disable_inc_pc = true;
+    let value = self._get_value(arg);
+    self._disable_inc_pc = false;
+    value
+  }
+
+  fn _set_value_without_update_status(&mut self, arg: &Args, data: u8) {
+    self._disable_update_status = true;
+    self._set_value(arg, data);
+    self._disable_update_status = false;
+  }
 
   fn _get_value(&mut self, arg: &Args) -> u8 {
     match arg {
@@ -457,6 +485,13 @@ impl APU {
     }
   }
 
+  fn _get_value_u16_without_inc_pc(&mut self, arg: &Args) -> u16 {
+    self._disable_inc_pc = true;
+    let value = self._get_value_u16(arg);
+    self._disable_inc_pc = false;
+    value
+  }
+
   fn _get_value_u16(&mut self, arg: &Args) -> u16 {
     match arg {
       Args::RegisterYA => {
@@ -469,6 +504,16 @@ impl APU {
         data
       }
       _ => panic!("not implemented _get_value_u16")
+    }
+  }
+
+  fn _set_value_u16(&mut self, arg: &Args, data: u16) {
+    match arg {
+      Args::RegisterYA => {
+        self.ya = data;
+        self.update_negative_and_zero_flags_u16(data);
+      }
+      _ => panic!("not implemented _set_value_u16")
     }
   }
 
@@ -624,7 +669,7 @@ impl APU {
   }
 
   fn inc_program_counter(&mut self) {
-    if self.disable_inc_pc {
+    if self._disable_inc_pc {
       return
     }
     self.program_counter = self.program_counter.wrapping_add(1);
@@ -639,12 +684,20 @@ impl APU {
   }
 
   fn update_negative_and_zero_flags(&mut self, result: u8) {
+    if self._disable_update_status {
+      return
+    }
+
     let test_bit = 0x80;
     self._set_status(FLAG_ZERO, result == 0);
     self._set_status(FLAG_NEGATIVE, (result & test_bit) != 0);
   }
 
   fn update_negative_and_zero_flags_u16(&mut self, result: u16) {
+    if self._disable_update_status {
+      return
+    }
+
     let test_bit = 0x8000;
     self._set_status(FLAG_ZERO, result == 0);
     self._set_status(FLAG_NEGATIVE, (result & test_bit) != 0);
