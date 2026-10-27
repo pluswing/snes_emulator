@@ -163,7 +163,7 @@ impl APU {
       0x48 => self.eor(&Args::RegisterA, &Args::Immediate),
       0xB2 => self.clr1(op),
       0x80 => self.setc(),
-      // 0xA8 => self.sbc(&Args::RegisterA, &Args::Immediate),
+      0xA8 => self.sbc(&Args::RegisterA, &Args::Immediate),
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -244,7 +244,27 @@ impl APU {
     self._set_status(FLAG_OVERFLOW, overflow);
     self._set_status(FLAG_HALF_CARRY, !half_carry);
     self._set_value_u16(dest, value);
- }
+  }
+
+  fn sbc(&mut self, dest: &Args, src: &Args) {
+    let value1 = self._get_value(src);
+    let value2 = self._get_value_without_inc_pc(dest);
+
+    let carry = 1 - (self.program_status & FLAG_CARRY);
+    let (rhs, carry_flag1) = value2.overflowing_sub(value1);
+    let (n, carry_flag2) = rhs.overflowing_sub(carry);
+
+    let overflow = (value2 & SIGN_BIT) != (value1 & SIGN_BIT)
+        && (value2 & SIGN_BIT) != (n & SIGN_BIT);
+
+    // FIXME ここがおかしい...
+    let half_carry = (value1 & 0x0F) <= (value2 & 0x0F);
+
+    self._set_value(dest, n);
+    self._set_status(FLAG_CARRY, !carry_flag1 && !carry_flag2);
+    self._set_status(FLAG_OVERFLOW, overflow);
+    self._set_status(FLAG_HALF_CARRY, half_carry);
+  }
 
   fn adc(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value(src);
