@@ -156,6 +156,23 @@ fn main() {
       "9d",
       "fa",
       "d4",
+      "d6",
+      "d8",
+      "d9",
+      "c9",
+      "db",
+      "cc",
+      "3e",
+      "e6",
+      "bf",
+      "f4",
+      "f6",
+      "e7",
+      "f7",
+      "f8",
+      "f9",
+      "e9",
+      "fb",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);

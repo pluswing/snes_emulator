@@ -21,14 +21,16 @@ pub enum Args {
   RegisterY,
   RegisterYA,
   Absolute_Indexed_by_X, // Absolute Indexed by X
+  Absolute_Indexed_by_Y, // Absolute Indexed by Y
   DirectPage,
   Absolute,
-  RegisterX_Direct_Page_Incriment,
   StackPointer,
   RegisterX_Direct_Page_Indirect,
+  RegisterX_Direct_Page_Indirect_Incriment,
   Direct_Page_Indirect_Indexex_by_Y, // Direct Page Indirect Indexed by Y
   Direct_Page_Indexed_Indirect_by_X, // Direct Page Indexed Indirect by X
   Direct_Page_Indexed_by_X, // Direct Page Indexed by X
+  Direct_Page_Indexed_by_Y, // Direct Page Indexed by Y
 }
 
 const BOOTROM: [u8; 64] = [
@@ -133,7 +135,7 @@ impl APU {
       0xF5 => self.mov(&Args::RegisterA,  &Args::Absolute_Indexed_by_X),
       0xF0 => self.beq(),
       0x3D => self.inc(&Args::RegisterX),
-      0xAF => self.mov(&Args::RegisterX_Direct_Page_Incriment, &Args::RegisterA),
+      0xAF => self.mov(&Args::RegisterX_Direct_Page_Indirect_Incriment, &Args::RegisterA),
       0xC8 => self.cmp(&Args::RegisterX, &Args::Immediate),
       0x90 => self.bcc(),
       0x40 => self.setp(),
@@ -171,39 +173,45 @@ impl APU {
       0x9D => self.mov(&Args::RegisterX, &Args::StackPointer),
       0xFA => self.mov(&Args::DirectPage, &Args::DirectPage),
       0xD4 => self.mov(&Args::Direct_Page_Indexed_by_X, &Args::RegisterA),
-      /*
-MOV (X), A
-MOV (X)+, A
-MOV dp, A
-MOV dp+X, A
-MOV !abs, A
-MOV !abs+X, A
-MOV !abs+Y, A
-MOV [dp+X], A
-MOV [dp]+Y, A
-MOV dp, X
-MOV dp+Y, X
-MOV !abs, X
-MOV dp, Y
-MOV dp+X, Y
-MOV !abs, Y
 
-Implied (type 1)	C6	1 byte	4 cycles
-Implied (type 1)	AF	1 byte	4 cycles
-Direct Page	C4	2 bytes	4 cycles
-Direct Page Indexed by X	D4	2 bytes	5 cycles
-Absolute	C5	3 bytes	5 cycles
-Absolute Indexed by X	D5	3 bytes	6 cycles
-Absolute Indexed by Y	D6	3 bytes	6 cycles
-Direct Page Indexed Indirect by X	C7	2 bytes	7 cycles
-Direct Page Indirect Indexed by Y	D7	2 bytes	6 cycles
-Direct Page	D8	2 bytes	4 cycles
-Direct Page Indexed by Y	D9	2 bytes	5 cycles
-Absolute	C9	3 bytes	5 cycles
-Direct Page	CB	2 bytes	4 cycles
-Direct Page Indexed by X	DB	2 bytes	5 cycles
-Absolute	CC	3 bytes	5 cycles
-       */
+      0xD6 => self.mov(&Args::Absolute_Indexed_by_Y, &Args::RegisterA), // MOV !abs+Y, A
+      0xD8 => self.mov(&Args::DirectPage, &Args::RegisterX), // MOV dp, X
+      0xD9 => self.mov(&Args::Direct_Page_Indexed_by_Y, &Args::RegisterX), // MOV dp+Y, X
+      0xC9 => self.mov(&Args::Absolute, &Args::RegisterX), // MOV !abs, X
+      0xDB => self.mov(&Args::Direct_Page_Indexed_by_X, &Args::RegisterY), // MOV dp+X, Y
+      0xCC => self.mov(&Args::Absolute, &Args::RegisterY), // MOV !abs, Y
+      0x3E => self.cmp(&Args::RegisterX, &Args::DirectPage),
+
+      0xE6 => self.mov(&Args::RegisterA, &Args::RegisterX_Direct_Page_Indirect), // MOV A, (X)
+      0xBF => self.mov(&Args::RegisterA, &Args::RegisterX_Direct_Page_Indirect_Incriment), // MOV A, (X)+
+      0xF4 => self.mov(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X), // MOV A, dp+X
+      0xF6 => self.mov(&Args::RegisterA, &Args::Absolute_Indexed_by_Y), // MOV A, !abs+Y
+      0xE7 => self.mov(&Args::RegisterA, &Args::Direct_Page_Indexed_Indirect_by_X), // MOV A, [dp+X]
+      0xF7 => self.mov(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexex_by_Y), // MOV A, [dp]+Y
+      0xF8 => self.mov(&Args::RegisterX, &Args::DirectPage), // MOV X, dp
+      0xF9 => self.mov(&Args::RegisterX, &Args::Direct_Page_Indexed_by_Y), // MOV X, dp+Y
+      0xE9 => self.mov(&Args::RegisterX, &Args::Absolute), // MOV X, !abs
+      0xFB => self.mov(&Args::RegisterY, &Args::Direct_Page_Indexed_by_X), // MOV Y, dp+X
+/*
+Immediate	E8	2 bytes	3 cycles
+Implied (type 1)	E6	1 byte	3 cycles
+Implied (type 1)	BF	1 byte	4 cycles
+Direct Page	E4	2 bytes	3 cycles
+Direct Page Indexed by X	F4	2 bytes	4 cycles
+Absolute	E5	3 bytes	4 cycles
+Absolute Indexed by X	F5	3 bytes	5 cycles
+Absolute Indexed by Y	F6	3 bytes	5 cycles
+Direct Page Indexed Indirect by X	E7	2 bytes	6 cycles
+Direct Page Indirect Indexed by Y	F7	2 bytes	6 cycles
+Immediate	CD	2 bytes	2 cycles
+Direct Page	F8	2 bytes	3 cycles
+Direct Page Indexed by Y	F9	2 bytes	4 cycles
+Absolute	E9	3 bytes	4 cycles
+Immediate	8D	2 bytes	2 cycles
+Direct Page	EB	2 bytes	3 cycles
+Direct Page Indexed by X	FB	2 bytes	4 cycles
+Absolute	EC	3 bytes	4 cycles
+*/
       _ => panic!("not implement op: {:02X}", op)
     }
   }
@@ -501,7 +509,7 @@ Absolute	CC	3 bytes	5 cycles
         self.update_negative_and_zero_flags(data);
       }
       // MOV "(X)+", A
-      Args::RegisterX_Direct_Page_Incriment => {
+      Args::RegisterX_Direct_Page_Indirect_Incriment => {
         let addr = self.direct_page_addr(self.get_register_x());
         self.mem_write(addr, data);
         self.set_register_x(self.get_register_x().wrapping_add(1));
@@ -553,9 +561,24 @@ Absolute	CC	3 bytes	5 cycles
       }
       Args::Direct_Page_Indexed_by_X => {
         let dest = self.mem_read(self.program_counter);
-        let dest = self.direct_page_addr(dest);
-        let x = self.get_register_x() as u16;
+        let x = self.get_register_x();
         let dest = dest.wrapping_add(x);
+        let dest = self.direct_page_addr(dest);
+        self.inc_program_counter();
+        self.mem_write(dest as u16, data);
+      }
+      Args::Absolute_Indexed_by_Y => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        self.inc_program_counter();
+        self.inc_program_counter();
+        let addr = addr.wrapping_add(self.get_register_y() as u16);
+        self.mem_write(addr, data);
+      }
+      Args::Direct_Page_Indexed_by_Y => {
+        let dest = self.mem_read(self.program_counter);
+        let y = self.get_register_y();
+        let dest = dest.wrapping_add(y);
+        let dest = self.direct_page_addr(dest);
         self.inc_program_counter();
         self.mem_write(dest as u16, data);
       }
