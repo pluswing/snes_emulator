@@ -31,6 +31,7 @@ pub enum Args {
   Direct_Page_Indexed_Indirect_by_X, // Direct Page Indexed Indirect by X
   Direct_Page_Indexed_by_X, // Direct Page Indexed by X
   Direct_Page_Indexed_by_Y, // Direct Page Indexed by Y
+  ProgramStatus,
 }
 
 const BOOTROM: [u8; 64] = [
@@ -192,28 +193,28 @@ impl APU {
       0xF9 => self.mov(&Args::RegisterX, &Args::Direct_Page_Indexed_by_Y), // MOV X, dp+Y
       0xE9 => self.mov(&Args::RegisterX, &Args::Absolute), // MOV X, !abs
       0xFB => self.mov(&Args::RegisterY, &Args::Direct_Page_Indexed_by_X), // MOV Y, dp+X
-/*
-Immediate	E8	2 bytes	3 cycles
-Implied (type 1)	E6	1 byte	3 cycles
-Implied (type 1)	BF	1 byte	4 cycles
-Direct Page	E4	2 bytes	3 cycles
-Direct Page Indexed by X	F4	2 bytes	4 cycles
-Absolute	E5	3 bytes	4 cycles
-Absolute Indexed by X	F5	3 bytes	5 cycles
-Absolute Indexed by Y	F6	3 bytes	5 cycles
-Direct Page Indexed Indirect by X	E7	2 bytes	6 cycles
-Direct Page Indirect Indexed by Y	F7	2 bytes	6 cycles
-Immediate	CD	2 bytes	2 cycles
-Direct Page	F8	2 bytes	3 cycles
-Direct Page Indexed by Y	F9	2 bytes	4 cycles
-Absolute	E9	3 bytes	4 cycles
-Immediate	8D	2 bytes	2 cycles
-Direct Page	EB	2 bytes	3 cycles
-Direct Page Indexed by X	FB	2 bytes	4 cycles
-Absolute	EC	3 bytes	4 cycles
-*/
+      0x7A => self.addw(&Args::RegisterYA, &Args::DirectPage),
+      0xCE => self.pop(&Args::RegisterX),
+      0xEE => self.pop(&Args::RegisterY),
+      0x8E => self.pop(&Args::ProgramStatus),
+      0x0B => self.asl(&Args::DirectPage), // FIXME pswがダメ
       _ => panic!("not implement op: {:02X}", op)
     }
+  }
+
+  fn addw(&mut self, dest: &Args, src: &Args) {
+    let value1 = self._get_value_u16(src);
+    let value2 = self._get_value_u16_without_inc_pc(dest);
+    let (value, carry) = value2.overflowing_add(value1);
+
+    let overflow = (value2 & SIGN_BIT_U16) == (value1 & SIGN_BIT_U16)
+        && (value1 & SIGN_BIT_U16) != (value & SIGN_BIT_U16);
+    let half_carry = (((value2 & 0x0FFF) + (value1 & 0x0FFF)) & 0x1000) != 0;
+
+    self._set_status(FLAG_OVERFLOW, overflow);
+    self._set_status(FLAG_CARRY, carry);
+    self._set_status(FLAG_HALF_CARRY, half_carry);
+    self._set_value_u16(dest, value);
   }
 
   fn mul(&mut self) {
@@ -490,6 +491,61 @@ Absolute	EC	3 bytes	4 cycles
       Args::StackPointer => {
         self.stack_pointer
       }
+      Args::RegisterX_Direct_Page_Indirect => {
+        let addr = self.direct_page_addr(self.get_register_x());
+        let data = self.mem_read(addr);
+        data
+      }
+      Args::RegisterX_Direct_Page_Indirect_Incriment => {
+        let addr = self.direct_page_addr(self.get_register_x());
+        let data = self.mem_read(addr);
+        self.set_register_x(self.get_register_x().wrapping_add(1));
+        data
+      }
+      Args::Direct_Page_Indexed_by_X => {
+        let addr = self.mem_read(self.program_counter);
+        let x = self.get_register_x();
+        let addr = addr.wrapping_add(x);
+        let addr = self.direct_page_addr(addr);
+        self.inc_program_counter();
+        let data = self.mem_read(addr);
+        data
+      }
+      Args::Absolute_Indexed_by_Y => {
+        let addr = self.mem_read_u16_no_wrapped(self.program_counter);
+        self.inc_program_counter();
+        self.inc_program_counter();
+        let addr = addr.wrapping_add(self.get_register_y() as u16);
+        let data = self.mem_read(addr);
+        data
+      }
+      Args::Direct_Page_Indexed_Indirect_by_X => {
+        let addr = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        let addr = addr.wrapping_add(self.get_register_x());
+        let addr = self.direct_page_addr(addr);
+        let addr = self.mem_read_u16(addr);
+        let data = self.mem_read(addr);
+        data
+      }
+      Args::Direct_Page_Indirect_Indexex_by_Y => {
+        let addr = self.mem_read(self.program_counter);
+        self.inc_program_counter();
+        let addr = self.direct_page_addr(addr);
+        let addr = self.mem_read_u16(addr) as u16;
+        let addr = addr.wrapping_add(self.get_register_y() as u16);
+        let data = self.mem_read(addr);
+        data
+      }
+      Args::Direct_Page_Indexed_by_Y => {
+        let addr = self.mem_read(self.program_counter);
+        let y = self.get_register_y();
+        let addr = addr.wrapping_add(y);
+        let addr = self.direct_page_addr(addr);
+        self.inc_program_counter();
+        let data = self.mem_read(addr);
+        data
+      }
       _ => panic!("not implemented _get_value")
     }
   }
@@ -581,6 +637,9 @@ Absolute	EC	3 bytes	4 cycles
         let dest = self.direct_page_addr(dest);
         self.inc_program_counter();
         self.mem_write(dest as u16, data);
+      }
+      Args::ProgramStatus => {
+        self.program_status = data
       }
       _ => panic!("not implemented _set_value")
     }

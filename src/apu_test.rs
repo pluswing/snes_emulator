@@ -173,6 +173,11 @@ fn main() {
       "f9",
       "e9",
       "fb",
+      "7a",
+      "ce",
+      "ee",
+      "8e",
+      "0b",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
