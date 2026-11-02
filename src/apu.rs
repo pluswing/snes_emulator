@@ -200,6 +200,9 @@ impl APU {
       0x0B => self.asl(&Args::DirectPage), // FIXME pswがダメ
       _ => panic!("not implement op: {:02X}", op)
     }
+
+    // let cycles = apu_cycles(op);
+    // self.cycles += cycles;
   }
 
   fn addw(&mut self, dest: &Args, src: &Args) {
@@ -250,6 +253,8 @@ impl APU {
     let value = value << 1;
     self._set_value(mode, value);
     self._set_status(FLAG_CARRY, carry);
+    // DirectPageの時も更新が必要。
+    self.update_negative_and_zero_flags(value);
   }
 
   fn _set_status(&mut self, flag: u8, value: bool) {
