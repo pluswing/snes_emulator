@@ -47,105 +47,89 @@ const main = () => {
   // outputHeader()
   // outputOpsDefinition()
   // outputCallFunction()
-  parse();
+  const defs = parse()
+  // console.log(defs);
+  outputCyclesFunction(defs)
+  outputCallFunction(defs)
 }
 
-const parse = () => {
+type Definision = {
+  name: string,
+  am: string,
+  op: string,
+  bytes: string,
+  cycles: string,
+  codes: string[],
+}
+
+const parse = (): Definision[] => {
   const files = fs.readdirSync("ops")
+  let allDefs = []
   for (const file of files) {
     const opname = file.split(".")[0]
     const html = fs.readFileSync(`ops/${file}`).toString()
     const doc = new DOMParser().parseFromString(html, "text/html")
+
+    // Immediate	E8	2 bytes	3 cycles
     const trs = doc.querySelectorAll(".wikitable > tbody > tr")
     const ops = Array.from(trs).map(tr => {
       return tr.querySelectorAll("td")
     }).filter((tds) => {
       return tds.length == 4 && tds[0].innerText.trim() != "Addressing Mode"
     })
-    console.log(ops.map(tds => tds[1].innerText))
-    break
-  }
-}
 
-const outputHeader = () => {
-  console.log(`
-use std::{collections::HashMap};
-use once_cell::sync::Lazy;
-use crate::cpu::{AddressingMode, CPU, FLAG_MEMORY_ACCUMULATOR_MODE, MODE_16BIT, OpCode, OpInfo};
-`.trim())
-}
+    // MOV A, #imm
+    const pre = doc.querySelector("pre")
+    const texts = pre.innerText.split("\n")
+      .map(t => t.trim())
+      .filter(t => t.startsWith(opname))
 
-const outputOpsDefinition = () => {
-  console.log("")
-  console.log(`
-pub static CPU_OPS_CODES: Lazy<HashMap<u8, OpCode>> = Lazy::new(|| {
-  let mut m = HashMap::new();
-`.trim())
-  const files = fs.readdirSync("ops")
-  const adressingModes = {}
-  for (const file of files) {
-    const opname = file.split(".")[0]
-    const html = fs.readFileSync(`ops/${file}`).toString()
-    const doc = new DOMParser().parseFromString(html, "text/html")
-    const table = doc.querySelector(".wikitable")
-    const tbodies = table?.querySelectorAll("tbody")
-    for (let i = 0; i < tbodies!.length; i++) {
-      if (i < 2) {
-        continue;
-      }
-      const tbody = tbodies![i]
-      const trs = tbody?.querySelectorAll("tr")!
-      for (const tr of trs) {
-        const tds = tr.querySelectorAll("td")
-        const addressingMode = tds[0].innerText.trim()
-        const opcode = tds[1].innerText.trim()
-        const bytes = tds[2].innerText.trim()
-        const clocks = tds[3].innerText.trim()
-        const [emulationBytes, nativeBytes] = parseBytes(bytes)
-        const [emulationClocks, nativeClocks] = parseClocks(clocks)
-        const am = ADDRESSING_MODE_TABLE[addressingMode]
-        assert(am)
-        if (!adressingModes[addressingMode]) {
-          adressingModes[addressingMode] = {}
+    const defs = ops.map((tds, i) => {
+      const cyclesText = tds[3].innerText.trim().replace(/\n/g, "").replace(/.*(\d+) cycles.*/, "$1")
+
+      return {
+        name: opname,
+        am: tds[0].innerText.trim(),
+        op: tds[1].innerText.trim(),
+        bytes: tds[2].innerText.replace(/bytes?/, "").trim(),
+        cycles: cyclesText,
+        codes: texts[texts.length > i ? i : 0].split(/[ ,]/).map(t => t.trim()).filter(t => t)
         }
-        adressingModes[addressingMode][opname] = true;
-
-        console.log(`  m.insert(0x${opcode}, OpCode::new(0x${opcode}, "${opname}", OpInfo::new(${nativeBytes}, ${nativeClocks}), OpInfo::new(${emulationBytes}, ${emulationClocks}), AddressingMode::${am}));`)
-      }
-    }
+    })
+    allDefs = [...allDefs, ...defs]
   }
-  console.log(`
-  m
-});`.trim())
-
-  console.log("/*")
-  console.log(JSON.stringify(adressingModes, null, 2))
-  console.log("*/")
+  return allDefs
 }
 
-const parseBytes = (rawBytes: string): [number, number] => {
-  // "2/3 bytes"
-  // "3 bytes"
-  assert(rawBytes.match(/^[1-9](\/[1-9])? bytes?$/), rawBytes)
-  const nums = rawBytes.replace(" bytes", "").replace(" byte", "")
-  if (nums.includes("/")) {
-    const [e, n] = nums.split("/")
-    return [parseInt(e, 10), parseInt(n, 10)]
-  } else {
-    return [parseInt(nums), parseInt(nums)]
-  }
+const outputCyclesFunction = (defs: Definision[]) => {
+  console.log("fn get_cycles(op: u8) -> u8 {")
+  console.log("  match op {")
+  defs.forEach(d => {
+    console.log(`    0x${d.op} => ${d.cycles},`)
+  })
+  console.log("  }")
+  console.log("}")
 }
 
-const parseClocks = (rawCycles: string): [number, number] => {
-  // "2 cycles*"
-  // 7 cycles per byte moved
-  rawCycles = rawCycles.replace(" per byte moved", "")
-  assert(rawCycles.match(/^[1-9] cycles\*?$/), rawCycles)
-  const nums = rawCycles.replace(" cycles", "").replace("*", "")
-  return [parseInt(nums), parseInt(nums)]
+const outputCallFunction = (defs: Definision[]) => {
+  console.log("fn call(cpu: &mut APU, op: u8) {")
+  console.log("  match op {")
+  defs.forEach(d => {
+    console.log(`    0x${d.op} => cpu.${d.name.toLowerCase()}(),`)
+  })
+  console.log("  }")
+  console.log("}")
 }
 
-const outputCallFunction = () => {
+// const outputHeader = () => {
+//   console.log(`
+// use std::{collections::HashMap};
+// use once_cell::sync::Lazy;
+// use crate::cpu::{AddressingMode, CPU, FLAG_MEMORY_ACCUMULATOR_MODE, MODE_16BIT, OpCode, OpInfo};
+// `.trim())
+// }
+/*
+const outputCallFunction = (defs: Definision[]) => {
   console.log("")
   console.log(`
 pub fn call(cpu: &mut CPU, op: &OpCode) {
@@ -175,6 +159,7 @@ pub fn call(cpu: &mut CPU, op: &OpCode) {
 }
 `)
 }
+*/
 
 main()
 
