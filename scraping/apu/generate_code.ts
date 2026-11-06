@@ -26,16 +26,19 @@ const ARGS_TABLE: {[key: string]: string} = {
   "dp bit": "op",
   "dip. bit": "op",
   "YA": "&Args::RegisterYA",
-  "PSW": "ProgramStatus",
-  "C": "/* C */",
-  "mem.": "/* mem. */",
-  "/mem.": "/* /mem. */",
-  "(Y)": "/* (Y) */",
-  "[!abs+X]": "/* [!abs+X] */",
-  "dp+x": "/* dp+x */",
+  "PSW": "&Args::ProgramStatus",
+  "C": "&Args::C/* C */",
+  "mem.": "&Args::mem/* mem. */",
+  "/mem.": "&Args::mem2/* /mem. */",
+  "(Y)": "&Args::CY/* (Y) */",
+  "[!abs+X]": "&Args::absY/* [!abs+X] */",
+  "dp+x": "&Args::dpx/* dp+x */",
   "mem. bit": "op",
-  "upage": "/* upage */",
-  "bit": "/* bit */"
+  "upage": "&Args::upage/* upage */",
+  "bit": "&Args::bit/* bit */",
+  "n": "&Args::n/* n */",
+  "$F6": "&Args::F6/* $F6 */",
+  "$00": "&Args::Zero/* $00 */",
 }
 
 const main = () => {
@@ -67,17 +70,23 @@ const parse = (): Definision[] => {
 
     // Immediate	E8	2 bytes	3 cycles
     const trs = doc.querySelectorAll(".wikitable > tbody > tr")
-    const ops = Array.from(trs).map(tr => {
-      return tr.querySelectorAll("td")
+    let ops = Array.from(trs).map(tr => {
+      return Array.from(tr.querySelectorAll("td"))
     }).filter((tds) => {
-      return tds.length == 4 && tds[0].innerText.trim() != "Addressing Mode"
+      return (tds.length == 4 && tds[0].innerText.trim() != "Addressing Mode") ||
+        (opname == "TCALL" && tds.length == 5 && tds[4].innerText.trim() != "Vector Address") ||
+        (opname == "MOVW" && tds.length == 5 && tds[0].innerText.trim() != "Direction")
     })
 
     // MOV A, #imm
     const pre = doc.querySelector("pre")
     const texts = pre.innerText.split("\n")
-      .map(t => t.trim())
+      .map(t => t.replace(/;.*/, "").trim())
       .filter(t => t.startsWith(opname))
+
+    if (opname == "MOVW") {
+      ops = ops.map(tds => tds.slice(1))
+    }
 
     const defs = ops.map((tds, i) => {
       const cyclesText = tds[3].innerText.trim().replace(/\n/g, "").replace(/.*(\d+) cycles.*/, "$1")
@@ -96,6 +105,7 @@ const parse = (): Definision[] => {
     })
     allDefs = [...allDefs, ...defs]
   }
+  allDefs.sort((a, b) => a.op < b.op ? -1 : 1)
   return allDefs
 }
 
