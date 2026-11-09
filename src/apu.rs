@@ -219,26 +219,36 @@ impl APU {
     // self.cycles += cycles;
   }
 
-  fn tclr1(&mut self, mode: &Args) {}
+  fn tclr1(&mut self, mode: &Args) {
+    // https://github.com/yupferris/TasmShiz/blob/master/spc700.txt#L606
+    // TCLR1 !a           4E    3     6   (a) = (a)&~A, ZN as for A-(a)    N.....Z.
+    let value = self._get_value_without_inc_pc(mode);
+    let a = self.get_register_a();
+    let value = value & !a;
+    self._set_value(mode, value);
+    self.update_negative_and_zero_flags(a.wrapping_sub(value));
+  }
+  fn tset1(&mut self, mode: &Args) {}
+
+
   fn pcall(&mut self, mode: &Args) {}
-  fn lsr(&mut self, mode: &Args) {}
   fn tcall(&mut self, mode: &Args) {}
   fn bbs(&mut self, op: u8, mode: &Args) {}
   fn bbc(&mut self, op: u8, mode: &Args) {}
+  fn cbne(&mut self, mode: &Args) {}
+  fn dbnz(&mut self, mode: &Args) {}
+  fn bvs(&mut self) {}
+  fn bvc(&mut self) {}
   fn or(&mut self, dest: &Args, src: &Args) {}
   fn or1(&mut self, dest: &Args, src: &Args, src2: &Args) {}
   fn and1(&mut self, dest: &Args, src: &Args, src2: &Args) {}
   fn eor1(&mut self, dest: &Args, src: &Args, src2: &Args) {}
   fn mov1(&mut self, dest: &Args, src: &Args, src2: &Args) {}
-  fn tset1(&mut self, mode: &Args) {}
   fn brk(&mut self) {}
   fn decw(&mut self, mode: &Args) {}
+  fn lsr(&mut self, mode: &Args) {}
   fn rol(&mut self, mode: &Args) {}
   fn ror(&mut self, mode: &Args) {}
-  fn cbne(&mut self, mode: &Args) {}
-  fn dbnz(&mut self, mode: &Args) {}
-  fn bvs(&mut self) {}
-  fn bvc(&mut self) {}
   fn reti(&mut self) {}
   fn div(&mut self) {}
   fn xcn(&mut self) {}
@@ -1363,7 +1373,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x1C => cpu.asl(&Args::RegisterA),
     0x1D => cpu.dec(&Args::RegisterX),
     0x1E => cpu.cmp(&Args::RegisterY, &Args::Immediate),
-    0x1F => cpu.jmp(&Args::absY/* [!abs+X] */),
+    0x1F => cpu.jmp(&Args::Absolute_Indexed_by_X),
     0x20 => cpu.clrp(),
     0x21 => cpu.tcall(&Args::n/* n */),
     0x22 => cpu.set1(op, &Args::bit/* bit */),
@@ -1394,7 +1404,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x3B => cpu.rol(&Args::Direct_Page_Indexed_by_X),
     0x3C => cpu.rol(&Args::RegisterA),
     0x3D => cpu.inc(&Args::RegisterX),
-    0x3E => cpu.cmp(&Args::RegisterX, &Args::Absolute),
+    0x3E => cpu.cmp(&Args::RegisterX, &Args::DirectPage),
     0x3F => cpu.call(&Args::Absolute),
     0x40 => cpu.setp(),
     0x41 => cpu.tcall(&Args::n/* n */),
@@ -1458,7 +1468,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x7B => cpu.ror(&Args::Direct_Page_Indexed_by_X),
     0x7C => cpu.ror(&Args::RegisterA),
     0x7D => cpu.mov(&Args::RegisterA, &Args::RegisterX),
-    0x7E => cpu.cmp(&Args::RegisterY, &Args::Absolute),
+    0x7E => cpu.cmp(&Args::RegisterY, &Args::DirectPage),
     0x7F => cpu.reti(),
     0x80 => cpu.setc(),
     0x81 => cpu.tcall(&Args::n/* n */),
@@ -1518,7 +1528,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xB7 => cpu.sbc(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0xB8 => cpu.sbc(&Args::DirectPage, &Args::Immediate),
     0xB9 => cpu.sbc(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
-    0xBA => cpu.movw(&Args::RegisterYA, &Args::F6/* $F6 */),
+    0xBA => cpu.movw(&Args::RegisterYA, &Args::DirectPage),
     0xBB => cpu.inc(&Args::Direct_Page_Indexed_by_X),
     0xBC => cpu.inc(&Args::RegisterA),
     0xBD => cpu.mov(&Args::StackPointer, &Args::RegisterX),
@@ -1532,7 +1542,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xC5 => cpu.mov(&Args::Absolute, &Args::RegisterA),
     0xC6 => cpu.mov(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterA),
     0xC7 => cpu.mov(&Args::Direct_Page_Indexed_Indirect_by_X, &Args::RegisterA),
-    0xC8 => cpu.cmp(&Args::RegisterX, &Args::DirectPage),
+    0xC8 => cpu.cmp(&Args::RegisterX, &Args::Immediate),
     0xC9 => cpu.mov(&Args::Absolute, &Args::RegisterX),
     // 0xCA => cpu.mov1(op, &Args::bit/* bit */, &Args::C/* C */),
     0xCB => cpu.mov(&Args::DirectPage, &Args::RegisterY),
@@ -1550,7 +1560,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xD7 => cpu.mov(&Args::Direct_Page_Indirect_Indexed_by_Y, &Args::RegisterA),
     0xD8 => cpu.mov(&Args::DirectPage, &Args::RegisterX),
     0xD9 => cpu.mov(&Args::Direct_Page_Indexed_by_Y, &Args::RegisterX),
-    0xDA => cpu.movw(&Args::Zero/* $00 */, &Args::RegisterYA),
+    0xDA => cpu.movw(&Args::DirectPage, &Args::RegisterYA),
     0xDB => cpu.mov(&Args::Direct_Page_Indexed_by_X, &Args::RegisterY),
     0xDC => cpu.dec(&Args::RegisterY),
     0xDD => cpu.mov(&Args::RegisterA, &Args::RegisterY),
