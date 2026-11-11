@@ -184,6 +184,18 @@ fn main() {
       "01",
       "11",
       "F1",
+      "03",
+      "E3",
+      "13",
+      "F3",
+      "2E",
+      "6E",
+      "70",
+      "50",
+      "08",
+      "19", // FIXME OR (X), (Y) <-(Y)がない。
+      "09",
+      "18",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
