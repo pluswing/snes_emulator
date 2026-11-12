@@ -193,9 +193,14 @@ fn main() {
       "70",
       "50",
       "08",
-      "19", // FIXME OR (X), (Y) <-(Y)がない。
+      "19",
       "09",
       "18",
+      "0A",
+      "2A",
+      "4A",
+      "6A",
+      "8A",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
