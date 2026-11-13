@@ -3,9 +3,9 @@ use core::panic;
 const FLAG_NEGATIVE: u8 = 1 << 7;
 const FLAG_OVERFLOW: u8 = 1 << 6;
 const FLAG_DIRECT_PAGE: u8 = 1 << 5;
-// 4 なし
+const FLAG_BREAK: u8 = 1 << 4;
 const FLAG_HALF_CARRY: u8 = 1 << 3;
-const FLAG_INTERRRUPT: u8 = 1 << 2;
+const FLAG_INTERRUPT: u8 = 1 << 2;
 const FLAG_ZERO: u8 = 1 << 1;
 const FLAG_CARRY: u8 = 1 << 0;
 
@@ -357,10 +357,52 @@ impl APU {
     self._set_status(FLAG_CARRY, v);
   }
 
-  fn not1(&mut self, op: u8, mode: &Args) {}
-  fn mov1(&mut self, dest: &Args, src: &Args, src2: &Args) {}
-  fn brk(&mut self) {}
-  fn decw(&mut self, mode: &Args) {}
+  fn not1(&mut self) {
+    let operand = self._get_value_u16(&Args::Immediate);
+    let addr = operand & 0x1FFF;
+    let bit = (operand & 0xE000) >> 13;
+    let mask = 0x01 << bit;
+    let value = self.mem_read(addr);
+    let v = (value & mask) >> bit;
+    let v = if v == 0 { 1 } else { 0 };
+    let v = (value & !mask) | (v << bit);
+    self.mem_write(addr, v);
+  }
+
+  fn mov1(&mut self, op: u8) {
+    let to_carry = op == 0xAA;
+
+    let operand = self._get_value_u16(&Args::Immediate);
+    let addr = operand & 0x1FFF;
+    let bit = (operand & 0xE000) >> 13;
+    let mask = 0x01 << bit;
+    let value = self.mem_read(addr);
+
+    if to_carry {
+      let v = (value & mask) >> bit;
+      self._set_status(FLAG_CARRY, v != 0);
+    } else {
+      let carry = self.program_status & FLAG_CARRY;
+      let value = (value & !mask) | (carry << bit);
+      self.mem_write(addr, value);
+    }
+  }
+
+  fn brk(&mut self) {
+    self._push_u16(self.program_counter);
+    self._push(self.program_status);
+    let addr = self.mem_read_u16(0xFFDE);
+    self.program_counter = addr;
+    self._set_status(FLAG_BREAK, true);
+    self._set_status(FLAG_INTERRUPT, false);
+  }
+
+  fn decw(&mut self, mode: &Args) {
+    let value = self._get_value_u16_without_inc_pc(mode);
+    let value = value.wrapping_sub(1);
+    self._set_value_u16(mode, value);
+  }
+
   fn lsr(&mut self, mode: &Args) {}
   fn rol(&mut self, mode: &Args) {}
   fn ror(&mut self, mode: &Args) {}
@@ -526,13 +568,9 @@ impl APU {
   }
 
   fn incw(&mut self, mode: &Args) {
-    let addr = self.mem_read(self.program_counter);
-    self.inc_program_counter();
-    let addr = self.direct_page_addr(addr);
-    let data = self.mem_read_u16(addr);
-    let data = data.wrapping_add(1);
-    self.mem_write_u16(addr, data);
-    self.update_negative_and_zero_flags_u16(data);
+    let value = self._get_value_u16_without_inc_pc(mode);
+    let value = value.wrapping_add(1);
+    self._set_value_u16(mode, value);
   }
 
   fn setc(&mut self) {
@@ -570,7 +608,7 @@ impl APU {
   }
 
   fn di(&mut self) {
-    self.program_status = self.program_status & !FLAG_INTERRRUPT;
+    self.program_status = self.program_status & !FLAG_INTERRUPT;
   }
 
   fn nop(&self) {
@@ -857,6 +895,13 @@ impl APU {
     match arg {
       Args::RegisterYA => {
         self.ya = data;
+        self.update_negative_and_zero_flags_u16(data);
+      }
+      Args::DirectPage => {
+        let addr = self.mem_read(self.program_counter);
+        let addr = self.direct_page_addr(addr);
+        self.mem_write_u16(addr, data);
+        self.inc_program_counter();
         self.update_negative_and_zero_flags_u16(data);
       }
       _ => panic!("not implemented _set_value_u16")
@@ -1644,7 +1689,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xA7 => cpu.sbc(&Args::RegisterA, &Args::Direct_Page_Indexed_Indirect_by_X),
     0xA8 => cpu.sbc(&Args::RegisterA, &Args::Immediate),
     0xA9 => cpu.sbc(&Args::DirectPage, &Args::DirectPage),
-    0xAA => cpu.mov1(&Args::C/* C */, &Args::mem/* mem. */, &Args::bit/* bit */),
+    0xAA => cpu.mov1(op),
     0xAB => cpu.inc(&Args::DirectPage),
     0xAC => cpu.inc(&Args::Absolute),
     0xAD => cpu.cmp(&Args::RegisterY, &Args::DirectPage),
@@ -1676,7 +1721,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xC7 => cpu.mov(&Args::Direct_Page_Indexed_Indirect_by_X, &Args::RegisterA),
     0xC8 => cpu.cmp(&Args::RegisterX, &Args::Immediate),
     0xC9 => cpu.mov(&Args::Absolute, &Args::RegisterX),
-    // 0xCA => cpu.mov1(op, &Args::bit/* bit */, &Args::C/* C */),
+    0xCA => cpu.mov1(op),
     0xCB => cpu.mov(&Args::DirectPage, &Args::RegisterY),
     0xCC => cpu.mov(&Args::Absolute, &Args::RegisterY),
     0xCD => cpu.mov(&Args::RegisterX, &Args::Immediate),
@@ -1708,7 +1753,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xE7 => cpu.mov(&Args::RegisterA, &Args::Direct_Page_Indexed_Indirect_by_X),
     0xE8 => cpu.mov(&Args::RegisterA, &Args::Immediate),
     0xE9 => cpu.mov(&Args::RegisterX, &Args::Absolute),
-    0xEA => cpu.not1(op, &Args::bit/* bit */),
+    0xEA => cpu.not1(),
     0xEB => cpu.mov(&Args::RegisterY, &Args::DirectPage),
     0xEC => cpu.mov(&Args::RegisterY, &Args::Absolute),
     0xED => cpu.notc(),

@@ -201,6 +201,12 @@ fn main() {
       "4A",
       "6A",
       "8A",
+      "EA",
+      "AA",
+      "CA",
+      "0F",
+      "1A",
+      "3A",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);
