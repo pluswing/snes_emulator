@@ -207,6 +207,16 @@ fn main() {
       "0F",
       "1A",
       "3A",
+      "5C",
+      "4C",
+      "3C",
+      "2C",
+      "7C",
+      "6C",
+      "7F",
+      // "9E",
+      "9F",
+      "A0",
     ];
     // let targets = testcases_by_name("MVN");
     // let targets = testcases_by_addressing_mode(&Args::Absolute_Indexed_by_X);

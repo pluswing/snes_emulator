@@ -403,13 +403,68 @@ impl APU {
     self._set_value_u16(mode, value);
   }
 
-  fn lsr(&mut self, mode: &Args) {}
-  fn rol(&mut self, mode: &Args) {}
-  fn ror(&mut self, mode: &Args) {}
-  fn reti(&mut self) {}
-  fn div(&mut self) {}
-  fn xcn(&mut self) {}
-  fn ei(&mut self) {}
+  fn lsr(&mut self, mode: &Args) {
+    let value = self._get_value_without_inc_pc(mode);
+    let carry = (value & 0x01) != 0;
+    let value = value >> 1;
+    self._set_value(mode, value);
+    self._set_status(FLAG_CARRY, carry);
+    self.update_negative_and_zero_flags(value);
+  }
+
+  fn rol(&mut self, mode: &Args) {
+    let value = self._get_value_without_inc_pc(mode);
+    let carry = (value & 0x80) != 0;
+    let value = value << 1;
+    let value = value | (self.program_status & FLAG_CARRY);
+    self._set_value(mode, value);
+    self._set_status(FLAG_CARRY, carry);
+    self.update_negative_and_zero_flags(value);
+  }
+
+  fn ror(&mut self, mode: &Args) {
+    let value = self._get_value_without_inc_pc(mode);
+    let carry = (value & 0x01) != 0;
+    let value = value >> 1;
+    let value = value | ((self.program_status & FLAG_CARRY) << 7);
+    self._set_value(mode, value);
+    self._set_status(FLAG_CARRY, carry);
+    self.update_negative_and_zero_flags(value);
+  }
+
+  fn reti(&mut self) {
+    self.program_status = self._pop();
+    self.program_counter = self._pop_u16()
+  }
+
+  fn div(&mut self) {
+    // YAレジスタの値をXインデックスレジスタの値で割り、商をアキュムレータに、余りをYインデックスレジスタに格納します。
+    let ya = self.ya;
+    let x = self.get_register_x();
+    let a = ya / x as u16;
+    let y = (ya % x as u16) as u8;
+    let overflow = a > 0xFF;
+    self.set_register_a(a as u8);
+    self.set_register_y(y);
+    self.update_negative_and_zero_flags(a as u8);
+    self._set_status(FLAG_OVERFLOW, overflow);
+    // self._set_status(FLAG_HALF_CARRY, a > 0);
+    // h: 不定。被除数と除数の組み合わせにより、セットされることも、クリアされることも、変化しないこともある。除算器の実装によるもので、このフラグの状態は何らの意味も持たない。
+  }
+
+  fn xcn(&mut self) {
+    let a = self.get_register_a();
+    let hi = (a & 0xF0) >> 4;
+    let lo = a & 0x0F;
+    let a = lo << 4 | hi;
+    self.set_register_a(a);
+    self.update_negative_and_zero_flags(a);
+  }
+
+  fn ei(&mut self) {
+    self._set_status(FLAG_INTERRUPT, true);
+  }
+
   fn das(&mut self) {}
   fn daa(&mut self) {}
   fn clrv(&mut self) {}
@@ -1136,6 +1191,12 @@ impl APU {
   fn _push(&mut self, value: u8) {
     self.mem_write(self.get_stack_pointer(), value);
     self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+  }
+
+  fn _pop_u16(&mut self) -> u16 {
+    let lo = self._pop();
+    let hi = self._pop();
+    (hi as u16) << 8 | lo as u16
   }
 
   fn _pop(&mut self) -> u8 {
