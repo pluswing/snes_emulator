@@ -383,6 +383,7 @@ impl APU {
       self._set_status(FLAG_CARRY, v != 0);
     } else {
       let carry = self.program_status & FLAG_CARRY;
+      // ^でよい？
       let value = (value & !mask) | (carry << bit);
       self.mem_write(addr, value);
     }
@@ -465,12 +466,55 @@ impl APU {
     self._set_status(FLAG_INTERRUPT, true);
   }
 
-  fn das(&mut self) {}
-  fn daa(&mut self) {}
-  fn clrv(&mut self) {}
-  fn notc(&mut self) {}
-  fn sleep(&mut self) {}
-  fn stop(&mut self) {}
+  fn das(&mut self) {
+    let a = self.get_register_a();
+    let a = if self.program_status & FLAG_CARRY == 0 || a > 0x99 {
+      self._set_status(FLAG_CARRY, false);
+      a.wrapping_sub(0x60)
+    } else {
+      a
+    };
+    let a = if self.program_status & FLAG_HALF_CARRY == 0 || (a & 0x0F) > 0x09 {
+      a.wrapping_sub(0x06)
+    } else {
+      a
+    };
+    self.set_register_a(a);
+    self.update_negative_and_zero_flags(a);
+  }
+
+  fn daa(&mut self) {
+    let a = self.get_register_a();
+    let a = if self.program_status & FLAG_CARRY != 0 || a > 0x99 {
+      self._set_status(FLAG_CARRY, true);
+      a.wrapping_add(0x60)
+    } else {
+      a
+    };
+    let a = if self.program_status & FLAG_HALF_CARRY != 0 || (a & 0x0F) > 0x09 {
+      a.wrapping_add(0x06)
+    } else {
+      a
+    };
+    self.set_register_a(a);
+    self.update_negative_and_zero_flags(a);
+  }
+
+  fn clrv(&mut self) {
+    self._set_status(FLAG_OVERFLOW, false);
+    self._set_status(FLAG_HALF_CARRY, false);
+  }
+
+  fn notc(&mut self) {
+    self._set_status(FLAG_CARRY, self.program_status & FLAG_CARRY == 0);
+  }
+
+  fn sleep(&mut self) {
+    // SLEEPはSPC700のスタンバイ命令です。リセットされるまでS-SMPをハングアップします。
+  }
+  fn stop(&mut self) {
+    // STOPはSPC700のスタンバイ命令です。リセットされるまでS-SMPをハングアップします。
+  }
 
   fn addw(&mut self, dest: &Args, src: &Args) {
     let value1 = self._get_value_u16(src);
@@ -495,23 +539,23 @@ impl APU {
   }
 
   fn set1(&mut self, op: u8, mode: &Args) {
-    let value = self._get_value_without_inc_pc(&Args::DirectPage);
+    let value = self._get_value_without_inc_pc(mode);
 
     // オペコードの最上位3ビットによって、そのバイト内のどのビットが設定されるかが決まります。
     let bit = (op & 0xE0) >> 5;
     let value = value | (0x01 << bit);
 
-    self._set_value(&Args::DirectPage, value);
+    self._set_value(mode, value);
   }
 
   fn clr1(&mut self, op: u8, mode: &Args) {
-    let value = self._get_value_without_inc_pc(&Args::DirectPage);
+    let value = self._get_value_without_inc_pc(mode);
 
     // オペコードの最上位3ビットによって、そのバイト内のどのビットがクリアされるかが決まります。
     let bit = (op & 0xE0) >> 5;
     let value = value & !(0x01 << bit);
 
-    self._set_value(&Args::DirectPage, value);
+    self._set_value(mode, value);
   }
 
   fn asl(&mut self, mode: &Args) {
@@ -818,6 +862,9 @@ impl APU {
         self.inc_program_counter();
         let data = self.mem_read(addr);
         data
+      }
+      Args::ProgramStatus => {
+        self.program_status
       }
       _ => panic!("not implemented _get_value")
     }
@@ -1582,7 +1629,7 @@ fn call(cpu: &mut APU, op: u8) {
   match op {
     0x00 => cpu.nop(),
     0x01 => cpu.tcall(op),
-    0x02 => cpu.set1(op, &Args::bit/* bit */),
+    0x02 => cpu.set1(op, &Args::DirectPage),
     0x03 => cpu.bbs(op),
     0x04 => cpu.or(&Args::RegisterA, &Args::DirectPage),
     0x05 => cpu.or(&Args::RegisterA, &Args::Absolute),
@@ -1598,7 +1645,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x0F => cpu.brk(),
     0x10 => cpu.bpl(),
     0x11 => cpu.tcall(op),
-    0x12 => cpu.clr1(op, &Args::bit/* bit */),
+    0x12 => cpu.clr1(op, &Args::DirectPage),
     0x13 => cpu.bbc(op),
     0x14 => cpu.or(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0x15 => cpu.or(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1607,14 +1654,14 @@ fn call(cpu: &mut APU, op: u8) {
     0x18 => cpu.or(&Args::DirectPage, &Args::Immediate),
     0x19 => cpu.or(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0x1A => cpu.decw(&Args::DirectPage),
-    0x1B => cpu.asl(&Args::dpx/* dp+x */),
+    0x1B => cpu.asl(&Args::Direct_Page_Indexed_by_X),
     0x1C => cpu.asl(&Args::RegisterA),
     0x1D => cpu.dec(&Args::RegisterX),
-    0x1E => cpu.cmp(&Args::RegisterY, &Args::Immediate),
+    0x1E => cpu.cmp(&Args::RegisterX, &Args::Absolute),
     0x1F => cpu.jmp(&Args::Absolute_Indexed_by_X),
     0x20 => cpu.clrp(),
     0x21 => cpu.tcall(op),
-    0x22 => cpu.set1(op, &Args::bit/* bit */),
+    0x22 => cpu.set1(op, &Args::DirectPage),
     0x23 => cpu.bbs(op),
     0x24 => cpu.and(&Args::RegisterA, &Args::DirectPage),
     0x25 => cpu.and(&Args::RegisterA, &Args::Absolute),
@@ -1630,7 +1677,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x2F => cpu.bra(),
     0x30 => cpu.bmi(),
     0x31 => cpu.tcall(op),
-    0x32 => cpu.clr1(op, &Args::bit/* bit */),
+    0x32 => cpu.clr1(op, &Args::DirectPage),
     0x33 => cpu.bbc(op),
     0x34 => cpu.and(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0x35 => cpu.and(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1646,7 +1693,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x3F => cpu.call(&Args::Absolute),
     0x40 => cpu.setp(),
     0x41 => cpu.tcall(op),
-    0x42 => cpu.set1(op, &Args::bit/* bit */),
+    0x42 => cpu.set1(op, &Args::DirectPage),
     0x43 => cpu.bbs(op),
     0x44 => cpu.eor(&Args::RegisterA, &Args::DirectPage),
     0x45 => cpu.eor(&Args::RegisterA, &Args::Absolute),
@@ -1662,7 +1709,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x4F => cpu.pcall(),
     0x50 => cpu.bvc(),
     0x51 => cpu.tcall(op),
-    0x52 => cpu.clr1(op, &Args::bit/* bit */),
+    0x52 => cpu.clr1(op, &Args::DirectPage),
     0x53 => cpu.bbc(op),
     0x54 => cpu.eor(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0x55 => cpu.eor(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1678,7 +1725,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x5F => cpu.jmp(&Args::Absolute),
     0x60 => cpu.clrc(),
     0x61 => cpu.tcall(op),
-    0x62 => cpu.set1(op, &Args::bit/* bit */),
+    0x62 => cpu.set1(op, &Args::DirectPage),
     0x63 => cpu.bbs(op),
     0x64 => cpu.cmp(&Args::RegisterA, &Args::DirectPage),
     0x65 => cpu.cmp(&Args::RegisterA, &Args::Absolute),
@@ -1694,7 +1741,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x6F => cpu.ret(),
     0x70 => cpu.bvs(),
     0x71 => cpu.tcall(op),
-    0x72 => cpu.clr1(op, &Args::bit/* bit */),
+    0x72 => cpu.clr1(op, &Args::DirectPage),
     0x73 => cpu.bbc(op),
     0x74 => cpu.cmp(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0x75 => cpu.cmp(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1710,7 +1757,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x7F => cpu.reti(),
     0x80 => cpu.setc(),
     0x81 => cpu.tcall(op),
-    0x82 => cpu.set1(op, &Args::bit/* bit */),
+    0x82 => cpu.set1(op, &Args::DirectPage),
     0x83 => cpu.bbs(op),
     0x84 => cpu.adc(&Args::RegisterA, &Args::DirectPage),
     0x85 => cpu.adc(&Args::RegisterA, &Args::Absolute),
@@ -1726,7 +1773,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x8F => cpu.mov(&Args::DirectPage, &Args::Immediate),
     0x90 => cpu.bcc(),
     0x91 => cpu.tcall(op),
-    0x92 => cpu.clr1(op, &Args::bit/* bit */),
+    0x92 => cpu.clr1(op, &Args::DirectPage),
     0x93 => cpu.bbc(op),
     0x94 => cpu.adc(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0x95 => cpu.adc(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1742,7 +1789,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x9F => cpu.xcn(),
     0xA0 => cpu.ei(),
     0xA1 => cpu.tcall(op),
-    0xA2 => cpu.set1(op, &Args::bit/* bit */),
+    0xA2 => cpu.set1(op, &Args::DirectPage),
     0xA3 => cpu.bbs(op),
     0xA4 => cpu.sbc(&Args::RegisterA, &Args::DirectPage),
     0xA5 => cpu.sbc(&Args::RegisterA, &Args::Absolute),
@@ -1758,7 +1805,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xAF => cpu.mov(&Args::RegisterX_Direct_Page_Indirect_Incriment, &Args::RegisterA),
     0xB0 => cpu.bcs(),
     0xB1 => cpu.tcall(op),
-    0xB2 => cpu.clr1(op, &Args::bit/* bit */),
+    0xB2 => cpu.clr1(op, &Args::DirectPage),
     0xB3 => cpu.bbc(op),
     0xB4 => cpu.sbc(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0xB5 => cpu.sbc(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
@@ -1774,7 +1821,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xBF => cpu.mov(&Args::RegisterA, &Args::RegisterX_Direct_Page_Indirect_Incriment),
     0xC0 => cpu.di(),
     0xC1 => cpu.tcall(op),
-    0xC2 => cpu.set1(op, &Args::bit/* bit */),
+    0xC2 => cpu.set1(op, &Args::DirectPage),
     0xC3 => cpu.bbs(op),
     0xC4 => cpu.mov(&Args::DirectPage, &Args::RegisterA),
     0xC5 => cpu.mov(&Args::Absolute, &Args::RegisterA),
@@ -1790,7 +1837,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xCF => cpu.mul(),
     0xD0 => cpu.bne(),
     0xD1 => cpu.tcall(op),
-    0xD2 => cpu.clr1(op, &Args::bit/* bit */),
+    0xD2 => cpu.clr1(op, &Args::DirectPage),
     0xD3 => cpu.bbc(op),
     0xD4 => cpu.mov(&Args::Direct_Page_Indexed_by_X, &Args::RegisterA),
     0xD5 => cpu.mov(&Args::Absolute_Indexed_by_X, &Args::RegisterA),
@@ -1806,7 +1853,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xDF => cpu.daa(),
     0xE0 => cpu.clrv(),
     0xE1 => cpu.tcall(op),
-    0xE2 => cpu.set1(op, &Args::bit/* bit */),
+    0xE2 => cpu.set1(op, &Args::DirectPage),
     0xE3 => cpu.bbs(op),
     0xE4 => cpu.mov(&Args::RegisterA, &Args::DirectPage),
     0xE5 => cpu.mov(&Args::RegisterA, &Args::Absolute),
@@ -1822,7 +1869,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xEF => cpu.sleep(),
     0xF0 => cpu.beq(),
     0xF1 => cpu.tcall(op),
-    0xF2 => cpu.clr1(op, &Args::bit/* bit */),
+    0xF2 => cpu.clr1(op, &Args::DirectPage),
     0xF3 => cpu.bbc(op),
     0xF4 => cpu.mov(&Args::RegisterA, &Args::Direct_Page_Indexed_by_X),
     0xF5 => cpu.mov(&Args::RegisterA, &Args::Absolute_Indexed_by_X),
