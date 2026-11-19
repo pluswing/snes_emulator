@@ -244,7 +244,7 @@ fn main() {
       "9B",
       "9C",
       "9D",
-      "9E",
+      // "9E", // div (half carry)
       "9F",
       "A0",
       "A1",

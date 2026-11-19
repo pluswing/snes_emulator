@@ -33,18 +33,6 @@ pub enum Args {
   Direct_Page_Indexed_by_X, // Direct Page Indexed by X
   Direct_Page_Indexed_by_Y, // Direct Page Indexed by Y
   ProgramStatus,
-
-  C/* C */,
-  mem/* mem. */,
-  mem2/* mem. */,
-  CY/* (Y) */,
-  absY/* [!abs+X] */,
-  dpx/* dp+x */,
-  upage/* upage */,
-  bit/* bit */,
-  n/* n */,
-  F6/* $F6 */,
-  Zero/* $00 */,
 }
 
 const BOOTROM: [u8; 64] = [
@@ -282,7 +270,7 @@ impl APU {
   fn dbnz(&mut self, mode: &Args) {
     let value = self._get_value_without_inc_pc(mode);
     let value = value.wrapping_sub(1);
-    self._set_value(mode, value);
+    self._set_value_without_update_status(mode, value);
     let jump = value != 0;
 
     let addr = (self._get_value(&Args::Immediate) as i8) as u16;
@@ -383,7 +371,6 @@ impl APU {
       self._set_status(FLAG_CARRY, v != 0);
     } else {
       let carry = self.program_status & FLAG_CARRY;
-      // ^でよい？
       let value = (value & !mask) | (carry << bit);
       self.mem_write(addr, value);
     }
@@ -592,6 +579,7 @@ impl APU {
 
     let value = left_value & right;
     self._set_value(left, value);
+    self.update_negative_and_zero_flags(value);
   }
 
   fn eor(&mut self, left: &Args, right: &Args) {
@@ -600,6 +588,7 @@ impl APU {
 
     let value = left_value ^ right;
     self._set_value(left, value);
+    self.update_negative_and_zero_flags(value);
   }
 
   fn subw(&mut self, dest: &Args, src: &Args) {
@@ -636,6 +625,7 @@ impl APU {
     self._set_status(FLAG_CARRY, !carry_flag1 && !carry_flag2);
     self._set_status(FLAG_OVERFLOW, overflow);
     self._set_status(FLAG_HALF_CARRY, !half_carry1 && !half_carry2);
+    self.update_negative_and_zero_flags(n);
   }
 
   fn adc(&mut self, dest: &Args, src: &Args) {
@@ -655,6 +645,7 @@ impl APU {
     self._set_status(FLAG_CARRY, carry_flag1 || carry_flag2);
     self._set_status(FLAG_OVERFLOW, overflow);
     self._set_status(FLAG_HALF_CARRY, half_carry);
+    self.update_negative_and_zero_flags(n);
   }
 
   // CMPW YA, dp
@@ -1049,46 +1040,19 @@ impl APU {
 
   // DEC X
   fn dec(&mut self, mode: &Args) {
-    match mode {
-      Args::RegisterX => {
-        let x = self.get_register_x().wrapping_sub(1);
-        self.set_register_x(x);
-        self.update_negative_and_zero_flags(x);
-      }
-      _ => panic!("not implemented dec")
-    }
+    let value = self._get_value_without_inc_pc(mode);
+    let value = value.wrapping_sub(1);
+    self._set_value(mode, value);
+    self.update_negative_and_zero_flags(value);
   }
 
   // INC Y
   // INC $01
   fn inc(&mut self, mode: &Args) {
-    match mode {
-      Args::RegisterA => {
-        let a = self.get_register_a().wrapping_add(1);
-        self.set_register_a(a);
-        self.update_negative_and_zero_flags(a);
-      }
-      Args::RegisterY => {
-        let y = self.get_register_y().wrapping_add(1);
-        self.set_register_y(y);
-        self.update_negative_and_zero_flags(y);
-      }
-      Args::RegisterX => {
-        let x = self.get_register_x().wrapping_add(1);
-        self.set_register_x(x);
-        self.update_negative_and_zero_flags(x);
-      }
-      Args::DirectPage => {
-        let addr = self.mem_read(self.program_counter);
-        let addr = self.direct_page_addr(addr);
-        self.inc_program_counter();
-        let data = self.mem_read(addr);
-        let data = data.wrapping_add(1);
-        self.mem_write(addr, data);
-        self.update_negative_and_zero_flags(data);
-      }
-      _ => panic!("not implemented inc")
-    }
+    let value = self._get_value_without_inc_pc(mode);
+    let value = value.wrapping_add(1);
+    self._set_value(mode, value);
+    self.update_negative_and_zero_flags(value);
   }
 
   fn bcs(&mut self) {
@@ -1684,7 +1648,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x36 => cpu.and(&Args::RegisterA, &Args::Absolute_Indexed_by_Y),
     0x37 => cpu.and(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0x38 => cpu.and(&Args::DirectPage, &Args::Immediate),
-    0x39 => cpu.and(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
+    0x39 => cpu.and(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0x3A => cpu.incw(&Args::DirectPage),
     0x3B => cpu.rol(&Args::Direct_Page_Indexed_by_X),
     0x3C => cpu.rol(&Args::RegisterA),
@@ -1716,12 +1680,12 @@ fn call(cpu: &mut APU, op: u8) {
     0x56 => cpu.eor(&Args::RegisterA, &Args::Absolute_Indexed_by_Y),
     0x57 => cpu.eor(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0x58 => cpu.eor(&Args::DirectPage, &Args::Immediate),
-    0x59 => cpu.eor(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
+    0x59 => cpu.eor(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0x5A => cpu.cmpw(&Args::RegisterYA, &Args::DirectPage),
     0x5B => cpu.lsr(&Args::Direct_Page_Indexed_by_X),
     0x5C => cpu.lsr(&Args::RegisterA),
     0x5D => cpu.mov(&Args::RegisterX, &Args::RegisterA),
-    0x5E => cpu.cmp(&Args::RegisterA, &Args::Immediate),
+    0x5E => cpu.cmp(&Args::RegisterY, &Args::Absolute),
     0x5F => cpu.jmp(&Args::Absolute),
     0x60 => cpu.clrc(),
     0x61 => cpu.tcall(op),
@@ -1748,7 +1712,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x76 => cpu.cmp(&Args::RegisterA, &Args::Absolute_Indexed_by_Y),
     0x77 => cpu.cmp(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0x78 => cpu.cmp(&Args::DirectPage, &Args::Immediate),
-    0x79 => cpu.cmp(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
+    0x79 => cpu.cmp(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0x7A => cpu.addw(&Args::RegisterYA, &Args::DirectPage),
     0x7B => cpu.ror(&Args::Direct_Page_Indexed_by_X),
     0x7C => cpu.ror(&Args::RegisterA),
@@ -1780,7 +1744,7 @@ fn call(cpu: &mut APU, op: u8) {
     0x96 => cpu.adc(&Args::RegisterA, &Args::Absolute_Indexed_by_Y),
     0x97 => cpu.adc(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0x98 => cpu.adc(&Args::DirectPage, &Args::Immediate),
-    0x99 => cpu.adc(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
+    0x99 => cpu.adc(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0x9A => cpu.subw(&Args::RegisterYA, &Args::DirectPage),
     0x9B => cpu.dec(&Args::Direct_Page_Indexed_by_X),
     0x9C => cpu.dec(&Args::RegisterA),
@@ -1800,7 +1764,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xAA => cpu.mov1(op),
     0xAB => cpu.inc(&Args::DirectPage),
     0xAC => cpu.inc(&Args::Absolute),
-    0xAD => cpu.cmp(&Args::RegisterY, &Args::DirectPage),
+    0xAD => cpu.cmp(&Args::RegisterY, &Args::Immediate),
     0xAE => cpu.pop(&Args::RegisterA),
     0xAF => cpu.mov(&Args::RegisterX_Direct_Page_Indirect_Incriment, &Args::RegisterA),
     0xB0 => cpu.bcs(),
@@ -1812,7 +1776,7 @@ fn call(cpu: &mut APU, op: u8) {
     0xB6 => cpu.sbc(&Args::RegisterA, &Args::Absolute_Indexed_by_Y),
     0xB7 => cpu.sbc(&Args::RegisterA, &Args::Direct_Page_Indirect_Indexed_by_Y),
     0xB8 => cpu.sbc(&Args::DirectPage, &Args::Immediate),
-    0xB9 => cpu.sbc(&Args::RegisterX_Direct_Page_Indirect, &Args::CY/* (Y) */),
+    0xB9 => cpu.sbc(&Args::RegisterX_Direct_Page_Indirect, &Args::RegisterY_Direct_Page_Indirect),
     0xBA => cpu.movw(&Args::RegisterYA, &Args::DirectPage),
     0xBB => cpu.inc(&Args::Direct_Page_Indexed_by_X),
     0xBC => cpu.inc(&Args::RegisterA),
