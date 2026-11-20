@@ -23,7 +23,11 @@ pub struct PPU {
   pub bgmode: u8, // 2105h WO - BGMODE  - BG制御レジスタ
   pub mosaic: u8, // 2106h WO - MOSAIC  - モザイク
   pub bg1sc: u8, // 2107h WO - BG1SC   - BG1画面設定
+  pub bg2sc: u8, // 2108h WO - BG2SC   - BG2画面設定
+  pub bg3sc: u8, // 2109h WO - BG3SC   - BG3画面設定
+  pub bg4sc: u8, // 210Ah WO - BG4SC   - BG4画面設定
   pub bg12nba: u8, // 210Bh WO - BG12NBA - BG1,2タイルデータアドレス
+  pub bg34nba: u8, // 210Ch WO - BG34NBA - BG3,4タイルデータアドレス
   // 2byteあるっぽい
   // BGnHOFS の場合 : (NewByte<<8) | (PrevByte&~7) | ((CurrentValue>>8)&7)
   // BGnVOFS の場合 : (NewByte<<8) | PrevByte
@@ -113,7 +117,11 @@ impl PPU {
       bgmode: 0x0F,
       mosaic: 0,
       bg1sc: 0,
+      bg2sc: 0,
+      bg3sc: 0,
+      bg4sc: 0,
       bg12nba: 0,
+      bg34nba: 0,
       bg1hofs: 0,
       bg1vofs: 0,
       vmain: 0x0F,
@@ -544,9 +552,11 @@ impl PPU {
       },
       0x2106 => self.mosaic = data,
       0x2107 => self.bg1sc = data,
-      0x2108..=0x210A => {} // FIXME BG画面設定
+      0x2108 => self.bg2sc = data,
+      0x2109 => self.bg3sc = data,
+      0x210A => self.bg4sc = data,
       0x210B => self.bg12nba = data, // 04 => BG1 4 x 0x2000 ?
-      0x210C => {}, // FIXME BG3,4タイルデータアドレス
+      0x210C => self.bg34nba = data,
       0x210D => {
         println!("BG1HOFS: {:02X}", data);
         self.bg1hofs = data
