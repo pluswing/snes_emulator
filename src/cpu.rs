@@ -1376,7 +1376,7 @@ impl CPU {
       let target = self.get_register_y();
       let addr = self.get_operand_address(mode);
       let value = if self.is_index_register_16bit_mode() {
-        self.wrapped_mem_read_u16(addr)
+        self.mem_read_u16(addr)
       } else {
         self.mem_read(addr) as u16
       };

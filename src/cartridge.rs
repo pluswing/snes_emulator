@@ -31,7 +31,12 @@ impl Cartridge {
   }
 
   fn mapping_mode(&self) -> u8 {
-    self.rom[0xFFD5] & 0x0F
+    let m = self.rom[0xFFD5] & 0x0F;
+    if m == 0x0F {
+      0
+    } else {
+      m
+    }
   }
 
   pub fn write(&mut self, bank: u8, addr: u16, data: u8) {

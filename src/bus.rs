@@ -530,6 +530,11 @@ impl Mem for Bus {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
           // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
+          0x420D => {
+            // ~
+            // 420Dh WO - MEMSEL  - WS2制御レジスタ
+            println!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+          }
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
         }
       }
