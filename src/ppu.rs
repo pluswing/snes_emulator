@@ -64,7 +64,7 @@ pub struct PPU {
   stat78: u8, // 213Fh RO - STAT78  - PPU2ステータス
 
   // 4200h WO - NMITIMEN- 割り込み有効化レジスタ
-  nmitimen: u8,
+  pub nmitimen: u8,
 
   // 4201h WO - WRIO    - Joypad Programmable I/O Port (Open-Collector Output)
   wrio: u8,
@@ -99,6 +99,11 @@ pub struct PPU {
   pub virq_flag: bool,
   hirq_wait_flag: bool,
   virq_wait_flag: bool,
+  pub nmi_flag: bool,
+  nmi_wait_flag: bool,
+
+  // debug
+  pub debug_bg1_tiles: Vec<u8>,
 }
 
 const WINDOW_WIDTH: usize = 256;
@@ -169,6 +174,11 @@ impl PPU {
       virq_flag: false,
       hirq_wait_flag: false,
       virq_wait_flag: false,
+      nmi_flag: false,
+      nmi_wait_flag: false,
+
+      // debug
+      debug_bg1_tiles: vec![0x00; 8*32 * 8*32 * 3],
     }
   }
 
@@ -219,8 +229,10 @@ impl PPU {
     if self.v_counter > 261 {
       self.frame_updated = true;
       self.v_counter = 0;
+      println!("VSYNC");
       self.virq_wait_flag = true;
       self.clear_nmi();
+      self.draw_debug_screens();
     }
 
     // V-Blank フラグ V-Blank中はセットされている。
@@ -239,6 +251,29 @@ impl PPU {
     // 典型的に、これは V-Blank 開始時にセットされ、 3 スキャンライン後に完了する。
     if self.auto_joypad_flag && self.v_counter >= 255 + 3 {
       self.auto_joypad_flag = false;
+    }
+  }
+
+  fn draw_debug_screens(&mut self) {
+    let bg = 2;
+    for y in 0..32 {
+      for x in 0..32 {
+        let index = x + (y * 8);
+        let tile = self.bgtile(bg, index).to_vec();
+        let palette = self.palette(0, bg);
+        for tx in 0..8 {
+          for ty in 0..8 {
+            let palette_index = self.palette_index(bg, &tile, tx, ty);
+            let rgb: [u8; 3] = palette[palette_index as usize];
+            let dx = x as usize * 8 + tx;
+            let dy = y as usize * 8 + ty;
+            let ai = (dy * 8*32 + dx) * 3;
+            self.debug_bg1_tiles[ai + 0] = rgb[0];
+            self.debug_bg1_tiles[ai + 1] = rgb[1];
+            self.debug_bg1_tiles[ai + 2] = rgb[2];
+          }
+        }
+      }
     }
   }
 
@@ -275,11 +310,19 @@ impl PPU {
 
   fn set_nmi(&mut self) {
     self.rdnmi = self.rdnmi | 0x80;
+    if !self.nmi_wait_flag && !self.nmi_flag {
+      self.nmi_flag = true;
+      self.nmi_wait_flag = true;
+      println!("SET NMI");
+    }
   }
 
   fn clear_nmi(&mut self) {
     self.rdnmi = self.rdnmi & 0x0F;
     self.vblank_flag = false;
+    self.nmi_wait_flag = false;
+    self.nmi_flag = false;
+      println!("CLEAR NMI");
   }
 
   fn bg1_tilemaps(&mut self, y: u32) -> &[u16] {
@@ -295,6 +338,22 @@ impl PPU {
     let tilesize: usize = bpp * 8 /* 8x8mode */ / 2 /*byte to word */;
     // bg12nbaは、bg1, bg2のデータが入っている。 => 0x210B
     let base = (((self.bg12nba & 0x0F) as u32) << 12) as usize;
+    let addr = base + tilesize * tileindex as usize;
+    let data = &self.vmdata[addr..=(addr + tilesize)];
+    data
+  }
+
+  fn bgtile(&mut self, bg: u8, tileindex: u16) -> &[u16] {
+    let bpp = self.bg_bpp(bg);
+    let tilesize: usize = bpp * 8 /* 8x8mode */ / 2 /*byte to word */;
+    // bg34nbaは、bg3, bg4のデータが入っている。 => 0x210C
+    let base = match bg {
+      1 => (((self.bg12nba & 0x0F) as u32) << 12) as usize,
+      2 => (((self.bg12nba & 0xF0) as u32) << 8) as usize,
+      3 => (((self.bg34nba & 0x0F) as u32) << 12) as usize,
+      4 => (((self.bg34nba & 0xF0) as u32) << 8) as usize,
+      _ => panic!("invalid bg: {}", bg),
+    };
     let addr = base + tilesize * tileindex as usize;
     let data = &self.vmdata[addr..=(addr + tilesize)];
     data
@@ -414,30 +473,7 @@ impl PPU {
           break;
         }
 
-        let mask = 0x80 >> x;
-        let palette_index = match self.bg_bpp(1) {
-          2 => {
-            // 1111_0000b
-            // 1010_1010b
-            // 3232_1010 (10)
-            //  2bpp固定処理
-            let line = tile[tile_y];
-            let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
-            palette_index
-          }
-          8 => {
-            // 8bpp固定
-            let line = &tile[tile_y..tile_y+4];
-            let mut palette_index = 0;
-            // FIXME あとで直す。see: https://sneslab.net/wiki/Graphics_Format#8bpp
-            for v in line {
-              palette_index = palette_index << 2;
-              palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
-            }
-            palette_index
-          }
-          _ => 0
-        };
+        let palette_index = self.palette_index(1, &tile, x, tile_y);
 
         let rgb: [u8; 3] = palette[palette_index as usize];
 
@@ -447,6 +483,33 @@ impl PPU {
         self.screen_state[base_index + 2] = rgb[2];
         draw_x += 1;
       }
+    }
+  }
+
+  fn palette_index(&mut self, bg: u8, tile: &Vec<u16>, x: usize, y: usize) -> u16 {
+    let mask = 0x80 >> x;
+    match self.bg_bpp(bg) {
+      2 => {
+        // 1111_0000b
+        // 1010_1010b
+        // 3232_1010 (10)
+        //  2bpp固定処理
+        let line = tile[y];
+        let palette_index = ((line & (mask << 8)) >> (15 - x)) + ((line & mask) >> (7 - x));
+        palette_index
+      }
+      8 => {
+        // 8bpp固定
+        let line = &tile[y..y+4];
+        let mut palette_index = 0;
+        // FIXME あとで直す。see: https://sneslab.net/wiki/Graphics_Format#8bpp
+        for v in line {
+          palette_index = palette_index << 2;
+          palette_index += ((v & (mask << 8)) >> (15 - x)) + ((v & mask) >> (7 - x));
+        }
+        palette_index
+      }
+      _ => 0
     }
   }
 
@@ -474,7 +537,7 @@ impl PPU {
   fn write_vmdatal(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_lsb(self.vmdata[vmadd], data);
-    println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
+    // println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 0 {
       self.increment_vmadd();
     }
@@ -483,7 +546,7 @@ impl PPU {
   fn write_vmdatah(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_msb(self.vmdata[vmadd], data);
-    println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
+    // println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 1 {
       self.increment_vmadd();
     }
@@ -539,7 +602,7 @@ impl PPU {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
-    println!("WRITE PPU ADDR: {:04X} => {:02X}", addr, data);
+    // println!("WRITE PPU ADDR: {:04X} => {:02X}", addr, data);
     match addr {
       0x2100 => self.inidisp = data,
       0x2101 => self.obsel = data,
@@ -610,13 +673,13 @@ impl PPU {
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
-    println!("READ PPU ADDR: {:04X}", addr);
+    // println!("READ PPU ADDR: {:04X}", addr);
     match addr {
       0x2134 => {
         // PPU積レジスタ (下位8bit)
         let v = (self.m7a as u32) * ((self.m7b as u32) >> 8);
-        (v & 0x0000FF) as u8;
-        0xFF // FIXME
+        (v & 0x0000FF) as u8
+        // 0xFF // FIXME
       },
       0x2135 => {
         // PPU積レジスタ (中位8bit)
@@ -664,7 +727,7 @@ impl PPU {
       }
       0x4210 => {
         let res = self.rdnmi;
-        self.clear_nmi();
+        // self.clear_nmi();
         res
       }
       0x4211 => {

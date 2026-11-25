@@ -9,6 +9,13 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
+  pub fn unit_test() -> Self {
+    Self {
+      rom: vec![0; 0],
+      sram: vec![0; 0]
+    }
+  }
+
   pub fn new(filename: &str) -> Self {
     let mut f = File::open(&filename).expect("no file found");
     let metadata = fs::metadata(&filename).expect("unable to read metadata");
@@ -31,7 +38,12 @@ impl Cartridge {
   }
 
   fn mapping_mode(&self) -> u8 {
-    self.rom[0xFFD5] & 0x0F
+    let m = self.rom[0xFFD5] & 0x0F;
+    if m == 0xF {
+      0
+    } else {
+      m
+    }
   }
 
   pub fn write(&mut self, bank: u8, addr: u16, data: u8) {

@@ -49,6 +49,7 @@ pub struct APU {
   pub stack_pointer: u8,
   pub program_status: u8,
   memory: Vec<u8>,
+  cycles: u32,
 
   // 2140h RW - APUI00  - Main CPU to Sound CPU Communication Port 0
   // 2141h RW - APUI01  - Main CPU to Sound CPU Communication Port 1
@@ -86,6 +87,7 @@ impl APU {
       stack_pointer: 0,
       program_status: 0,
       memory,
+      cycles: 0,
       input: [0x00; 4],
       output: [0x00; 4],
       _disable_inc_pc: false,
@@ -95,14 +97,24 @@ impl APU {
   }
 
   pub fn tick(&mut self, cycles: u32) {
-    // FIXME cyclesを考慮
-    self.run();
+    self.cycles += cycles;
+    let op = self.memory[self.program_counter as usize];
+    let cycles = get_cycles(op);
+    if self.cycles < cycles as u32 {
+      return
+    }
+    self._run(op);
+    self.cycles -= cycles as u32;
   }
 
   pub fn run(&mut self) {
     let op = self.memory[self.program_counter as usize];
+    self._run(op);
+  }
+
+  fn _run(&mut self, op: u8) {
     self.inc_program_counter();
-    println!("APU run OP: {:04X}", op);
+    // println!("APU run OP: {:04X}", op);
 /*
     match op {
       0x00 => self.nop(),
@@ -204,7 +216,6 @@ impl APU {
     }
     */
     call(self, op);
-    let cycles = get_cycles(op);
     // self.cycles += cycles;
   }
 

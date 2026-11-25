@@ -1,6 +1,6 @@
 use core::panic;
 
-use crate::{cartridge::{self, Cartridge}, ppu::PPU, apu::APU};
+use crate::{cartridge::{Cartridge}, ppu::PPU, apu::APU};
 
 #[repr(u8)]
 enum MemorySpeed {
@@ -78,6 +78,11 @@ pub struct Bus {
   transfered_hdma: bool,
   transfer: [bool; 8],
   hdma_transfer_finished: [bool; 8],
+
+  pub joypad1: u16,
+
+  unit_test_mode: bool,
+  test_memory: Vec<u8>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,6 +93,33 @@ enum DMADrection {
 }
 
 impl Bus {
+  pub fn unit_test() -> Self {
+    Self {
+      wram: vec![0; 0],
+      ext_wram: vec![0; 0],
+      ppu: PPU::new(),
+      apu: APU::new(),
+      cartridge: Cartridge::unit_test(),
+      cycles: 0,
+      rdio: 0x00,
+      mdmean: 0x00,
+      hdmean: 0x00,
+      dmap: [0xFF; 8],
+      bbad: [0xFF; 8],
+      a1: [0x00FFFF; 8],
+      das: [0xFFFFFF; 8],
+      a2: [0xFFFF; 8],
+      ntrl: [0xFF; 8],
+      wmadd: 0x000000,
+      transfered_hdma: false,
+      transfer: [false; 8],
+      hdma_transfer_finished: [false; 8],
+      joypad1: 0,
+      unit_test_mode: true,
+      test_memory: vec![0x00; 0x100_0000],
+    }
+  }
+
   pub fn new(ppu: PPU, cartridge: Cartridge) -> Self {
     Self {
       // 2つで128KB
@@ -114,6 +146,10 @@ impl Bus {
       transfered_hdma: false,
       transfer: [false; 8],
       hdma_transfer_finished: [false; 8],
+      joypad1: 0,
+
+      unit_test_mode: false,
+      test_memory: vec![0; 0],
     }
   }
 
@@ -424,6 +460,10 @@ pub trait Mem {
 
 impl Mem for Bus {
   fn mem_read(&mut self, addr: u32) -> u8 {
+    if self.unit_test_mode {
+      return self.test_memory[addr as usize]
+    }
+
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
 
@@ -442,14 +482,14 @@ impl Mem for Bus {
           0x4210..=0x4212 => self.ppu.read(addr),
           0x4213 => self.rdio,
           0x4214..=0x421F => {
-            println!("mem_read({:02X}:{:04X})", bank, addr);
+            // println!("mem_read({:02X}:{:04X})", bank, addr);
             0
           }
-          0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
-          0x6000..=0x7FFF => {
-            // FIXME カートリッジ 予約済み領域
-            0x00 // FIXME 何が返るのが正解？
-          }
+          // 0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
+          // 0x6000..=0x7FFF => {
+          //   // FIXME カートリッジ 予約済み領域
+          //   0x00 // FIXME 何が返るのが正解？
+          // }
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -467,7 +507,16 @@ impl Mem for Bus {
         match addr {
           0x0000..=0x1FFF => self.wram[addr as usize],
           0x2100..=0x213F => self.ppu.read(addr),
-          // 0x4210..=0x4212 => self.ppu.read(addr),
+          0x4210..=0x4211 => self.ppu.read(addr),
+          0x4212 => 0, // HVBJOY	H/V-Blankフラグとジョイスティック有効フラグ
+          0x4213 => 0, // RDIO	プログラマブルIOポート(入力)
+          0x4218 => {
+            (self.joypad1 & 0x00FF) as u8
+          }
+          0x4219 => {
+            ((self.joypad1 & 0xFF00) >> 8) as u8
+          }
+          0x421A..=0x421F => 0, // コントローラー
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -480,6 +529,11 @@ impl Mem for Bus {
   }
 
   fn mem_write(&mut self, addr: u32, data: u8) {
+    if self.unit_test_mode {
+      self.test_memory[addr as usize] = data;
+      return
+    }
+
     let bank = ((addr & 0xFF_0000) >> 16) as u8;
     let addr = (addr & 0x00_FFFF) as u16;
 
@@ -495,7 +549,7 @@ impl Mem for Bus {
           0x2100..=0x213F => self.ppu.write(addr, data),
           0x2140..=0x217F => self.apu.write(addr, data),
           0x2180..=0x2183 => self.write_wram_registers(addr, data),
-          0x2184 => {}, // TODO マリオコレクションでアクセス（これなに？）
+          // 0x2184 => {}, // TODO マリオコレクションでアクセス（これなに？）
           0x4016 => {}, // 4016h WO  - JOYWR - Joypad出力
           0x4200..=0x4201 => self.ppu.write(addr, data),
           0x420B => self.write_dma_registers(addr, data),
@@ -530,6 +584,17 @@ impl Mem for Bus {
           0x0000..=0x1FFF => self.wram[addr as usize] = data,
           0x2100..=0x213F => self.ppu.write(addr, data),
           // 0x8000..=0xFFFF => self.cartridge.read(bank, addr),
+          0x420D => {
+            // - MEMSEL (ROMアクセススピード)
+          }
+
+          0x4200..=0x4201 => self.ppu.write(addr, data),
+          0x420B => self.write_dma_registers(addr, data),
+          0x420C => self.write_dma_registers(addr, data),
+          0x4300..=0x437F => {
+            self.write_dma_registers(addr, data);
+          }
+
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
         }
       }

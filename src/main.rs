@@ -11,8 +11,10 @@ use cpu::CPU;
 use ppu::PPU;
 
 use sdl3::pixels::{Color, PixelFormat};
-use sdl3::event::Event;
+use sdl3::event::{Event, WindowEvent};
 use sdl3::keyboard::Keycode;
+
+use crate::bus::Mem;
 
 fn main() {
 
@@ -34,10 +36,23 @@ fn main() {
   canvas.clear();
   canvas.present();
 
+  // debug
+  let window2 = video_subsystem.window("debug", 8*32, 8*32)
+        .position_centered()
+        .build()
+        .unwrap();
+  let mut canvas2 = window2.into_canvas();
+  let creator2 = canvas2.texture_creator();
+  let mut texture2 = creator2
+    .create_texture_target(PixelFormat::RGB24, 8*32, 8*32)
+    .unwrap();
+  // debug
+
   let mut event_pump = sdl_context.event_pump().unwrap();
 
-  let cartridge = Cartridge::new("rom/SNES/TEST/cputest.sfc");
+  let cartridge = Cartridge::new("rom/SNES/TEST/cputest-full.sfc");
   // let cartridge = Cartridge::new("rom/SNES/TEST/gradient-test.sfc");
+  // let cartridge = Cartridge::new("rom/SNES/TEST/twoship.sfc");
   // let cartridge = Cartridge::new("rom/SNES/TEST/ppubusact.sfc");
   // let mut cartridge = Cartridge::new("rom/SNES/ROM/CHRONO TRIGGER/50/Chrono Trigger (Japan).sfc");
   // let cartridge = Cartridge::new("rom/SNES/ROM/SUPERMARIO COLLECTION/61/Super Mario Collection (Japan).sfc");
@@ -61,10 +76,19 @@ fn main() {
 
       for event in event_pump.poll_iter() {
         match event {
-          Event::Quit {..} |
+          Event::Window {
+              win_event: WindowEvent::CloseRequested,
+              ..
+          } |
           Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
               break 'running
           },
+          Event::KeyDown { keycode: Some(Keycode::A), .. } => {
+            cpu.bus.joypad1 = 0x0080;
+          }
+          Event::KeyUp { keycode: Some(Keycode::A), .. } => {
+            cpu.bus.joypad1 = 0x0000;
+          }
           _ => {}
         }
       }
@@ -77,6 +101,14 @@ fn main() {
       canvas.draw_debug_text(format!("FRAME: {}", frame).as_str(), (0, 100)).unwrap();
 
       canvas.present();
+
+      // debug
+      canvas2.clear();
+      texture2.update(None, &cpu.bus.ppu.debug_bg1_tiles, 8*32 * 3).unwrap();
+      canvas2.copy(&texture2, None, None).unwrap();
+      canvas2.present();
+      // debug
+
     }
 
     // ::std::thread::sleep(Duration::new(0,   1_000_000_000u32 / 60));

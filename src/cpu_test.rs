@@ -5,12 +5,14 @@ use std::fmt;
 
 use crate::cpu::{AddressingMode, CPU};
 use crate::opscodes::CPU_OPS_CODES;
-use crate::bus::Mem;
+use crate::bus::{Bus, Mem};
 
 mod cpu;
 mod opscodes;
 mod ppu;
 mod bus;
+mod cartridge;
+mod apu;
 
 /*
 {
@@ -131,7 +133,8 @@ fn main() {
       "00.e",
       "00.n",
     ];
-    // let targets = testcases_by_name("MVN");
+    // 
+    let targets = testcases_by_name("CPY");
     // let targets = testcases_by_addressing_mode(&AddressingMode::Absolute_Indexed_by_X);
     // let targets = testcases();
 
@@ -139,7 +142,7 @@ fn main() {
       let input_fn = fs::read_to_string(format!("tests/cpu_cases/{}.json", target)).expect("JSON Read Failed.");
       let deserialized: Vec<TestCaseData> = serde_json::from_str(&input_fn).unwrap();
 
-      let mut cpu = CPU::new();
+      let mut cpu = CPU::new(Bus::unit_test());
 
       for data in &deserialized {
         // cpuにInitialをセット

@@ -276,9 +276,12 @@ impl CPU {
                 addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Indexed_by_Y => {
-                let base = self.wrapped_mem_read_u16(pc);
+                let base = self.mem_read_u16(pc);
+                // println!("BASE: {:04X}", base);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
+                // println!("ADDR: {:04X}", addr);
                 let addr = addr.wrapping_add(self.get_register_y() as u32);
+                // println!("ADDR+: {:04X}", addr);
                 addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Long_Indexed_by_X => {
@@ -299,12 +302,10 @@ impl CPU {
               (bank << 16) | base
             }
             AddressingMode::Absolute_Indexed_Indirect => {
-              // アドレス部の内容にXレジスタを足したアドレスから16bitを読み込み、それを下位16bit、上位8bitをプログラムバンクレジスタとしたアドレスに目的のデータが格納されています。
-              // 絶対インデクスYインダイレクトモードはありません。($1234, x)のように表します。
-              let base = self.wrapped_mem_read_u16(pc);
-              let base = base.wrapping_add(self.get_register_x()) & 0x00FFFF;
+              let base = self.mem_read_u16(pc) as u32;
+              let base = base.wrapping_add(self.get_register_x() as u32) & 0x00FFFF;
               let addr = ((self.program_bank as u32) << 16) | base as u32;
-              let addr = self.wrapped_mem_read_u16(addr & 0xFFFFFF);
+              let addr = self.mem_read_u16(addr & 0xFFFFFF);
               addr as u32
             }
             AddressingMode::Absolute_Indirect_Long => {
@@ -357,7 +358,7 @@ impl CPU {
               // [$12]のように表します。
               let base = self.mem_read(pc) as u32;
               let base = (self.direct_page as u32).wrapping_add(base) & 0x00FFFF;
-              let addr = self.wrapped_mem_read_u16(base) as u32;
+              let addr = self.mem_read_u16(base) as u32;
               let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
             }
@@ -373,7 +374,19 @@ impl CPU {
                 addr.wrapping_add(self.get_register_x() as u32)
               };
               let addr = addr & 0x00FFFF;
-              let addr = self.force_wrapped_mem_read_u16(addr) as u32;
+              let addr = if self.is_native_mode() {
+                self.force_wrapped_mem_read_u16(addr) as u32
+              } else {
+                // from https://github.com/gilyon/snes-tests/blob/main/cputest/README.md
+                // - エミュレーションモードでDの下位バイトがゼロ以外の場合、(direct,X)アドレッシングモードの動作が奇妙です。
+                //   間接アドレスの下位バイトは、ページ折り返しなしで`direct_addr+X+D`から読み込まれます（これは想定どおりです）。上位バイトは`direct_addr+X+D+1`から読み込まれますが、+1はページ内で折り返しが行われます。
+                //   例：Emulation=1、D=$11A、X=$EE、命令が`lda ($F7,X)`の場合、$F7 + $11A + $EE = $2FFとなります。アドレスの下位バイトは$2FFから、上位バイトは$200から読み込まれます。
+                //   この動作は、このアドレッシングモードにのみ適用され、他の間接アドレッシングモードには適用されません。
+                // self.wrapped_mem_read_u16(addr) as u32
+                let lo = self.mem_read(addr) as u32;
+                let hi = self.mem_read((addr & 0xFFFF00) | ((addr + 1) & 0x0000FF))  as u32;
+                (hi << 8) | (lo as u32)
+              };
               (self.data_bank as u32) << 16 | addr
             }
             // LDA (dp), Y => B1 dp
@@ -390,13 +403,14 @@ impl CPU {
             AddressingMode::Direct_Page_Indirect_Long_Indexed_by_Y => {
               // アドレス部の内容にダイレクトページレジスタの値を足して得られるアドレスから24bitを読み込み、さらにYレジスタを足したアドレスに目的のデータが格納されています。
               // ダイレクトインダイレクトロングインデクスXモードはありません。[$12],yのように表します。
+
               let addr = self.mem_read(pc);
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
-              let base = self.wrapped_mem_read_u16(addr);
+              let base = self.mem_read_u16(addr);
               // println!("ADDR: {:06X}", addr);
               let bank = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
-                let addr = addr & 0xFF00 | (addr + 2) & 0x00FF;
+                let addr = (addr + 1) & 0xFF00 | (addr + 2) & 0x00FF;
                 self.mem_read(addr)
               } else {
                 self.mem_read((addr + 2) & 0xFFFF)
@@ -498,6 +512,15 @@ impl CPU {
         }
     }
 
+    pub fn mem_write_auto_xy(&mut self, pos: u32, data: u16) {
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0x00FF) as u8;
+        self.mem_write(pos, lo);
+        if self.is_index_register_16bit_mode() {
+          self.mem_write(pos + 1, hi);
+        }
+    }
+    
     pub fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
@@ -538,7 +561,8 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
-      self.hvirq();
+        self.nmi();
+        self.hvirq();
         // if let Some(_nmi) = self.bus.poll_nmi_status() {
         //     self.interrupt_nmi();
         // }
@@ -558,7 +582,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                println!("{:06X} {}", pc, op.name);
+                println!("{:06X} {} NMI={}", pc, op.name, self.bus.ppu.nmi_flag);
                 call(self, &op);
                 self.bus.tick();
             }
@@ -568,12 +592,66 @@ impl CPU {
 
     }
 
-    fn hvirq(&mut self) {
-      if !self.bus.ppu.hirq_flag && !self.bus.ppu.virq_flag {
+    fn nmi(&mut self) {
+      if (self.bus.ppu.nmitimen & 0x80) == 0 {
         return
       }
-      println!("H/V IRQ");
-      if self.status & FLAG_INTERRRUPT != 0 {
+
+      if !self.bus.ppu.nmi_flag {
+        return
+      }
+
+      if self.is_emulation_mode() {
+        self.status = self.status & !FLAG_BREAK;
+      } else {
+        self._push(self.program_bank);
+      }
+      self._push_u16(self.program_counter);
+      self._push(self.status);
+      self.status = self.status & !FLAG_DECIMAL;
+      self.status = self.status | FLAG_INTERRRUPT;
+      self.program_bank = 0x00;
+      if self.is_emulation_mode() {
+        self.program_counter = self.mem_read_u16(0xFFFA);
+      } else {
+        self.program_counter = self.mem_read_u16(0xFFEA);
+      }
+      println!("NMI IRQ => {:04X} {}", self.program_counter, self.bus.ppu.nmi_flag);
+      self.bus.ppu.nmi_flag = false;
+    }
+
+    // !! IRQ!!
+    fn hvirq(&mut self) {
+      // D7	D6	D5	D4	D3	D2	D1	D0
+      // n	-	y	x	-	-	-	a
+      // n : NMI 有効フラグ 0 の場合、NMI は発生しません。 1 の場合、NMI は V-Blank 開始時に発生します。 NMI は V カウンタが 0xE1 (225) の時に若干遅れて発生します。 オーバースキャンが有効の時は、たぶん 0xF0 (240) で発生します。 詳しくは 0x2133 を参照してください。
+      // x/y : IRQ 有効
+      // 0/0 => IRQ は発生しない
+      // 0/1 => V カウンタが 0x4209 ～ 0x420a で設定された値に達した時 IRQ 発生
+      // 1/0 => H カウンタが 0x4207 ～ 0x4208 で設定された値に達した時 IRQ 発生
+      // 1/1 => H カウンタが 0x4207 ～ 0x4208 で設定された値に達し、かつ V カウンタが 0x4209 ～ 0x420a で設定された値と同じなら IRQ 発生
+      let y = (self.bus.ppu.nmitimen & 0x20) != 0;
+      let x = (self.bus.ppu.nmitimen & 0x10) != 0;
+
+      if !y && !x {
+        return
+      }
+
+      let h = self.bus.ppu.hirq_flag;
+      let v = self.bus.ppu.virq_flag;
+
+      if !h && !v {
+        return
+      }
+
+      if y && !v {
+        return
+      }
+      if x && !h {
+        return;
+      }
+
+      if (self.status & FLAG_INTERRRUPT) == 0 {
 
         if self.is_emulation_mode() {
           self.status = self.status & !FLAG_BREAK;
@@ -585,12 +663,18 @@ impl CPU {
         self.status = self.status & !FLAG_DECIMAL;
         self.status = self.status | FLAG_INTERRRUPT;
         self.program_bank = 0x00;
-        self.program_counter = 0xFFEE;
+        if self.is_emulation_mode() {
+          self.program_counter = self.mem_read_u16(0xFFFE);
+        } else {
+          self.program_counter = self.mem_read_u16(0xFFEE);
+        }
         self.bus.ppu.hirq_flag = false;
         self.bus.ppu.virq_flag = false;
+        println!("H/V IRQ => {:04X}", self.program_counter);
       }
       self.bus.ppu.timeup = self.bus.ppu.timeup | 0x80;
     }
+
 /* ファミコンの割り込み実装。
     fn interrupt_nmi(&mut self) {
         debug!("** INTERRUPT_NMI **");
@@ -688,10 +772,13 @@ impl CPU {
       }
     }
     pub fn pei(&mut self, mode: &AddressingMode) {
+      // Test 03c4: pei ($ff)
+      //    Input: A=$1234 X=$3456 Y=$5678 P=$ff E=1 S=$0100 DBR=$7f D=$0200 ($0002ff)=$54 ($000300)=$76
+      //    Expected output: A=$1234 X=$0056 Y=$0078 P=$ff E=1 S=01fe ($0000ff)=$54 ($000100)=$76
       let addr = self.get_operand_address(mode);
       let addr = self.mem_read(addr);
       let addr = self.direct_page.wrapping_add(addr as u16) & 0x00FFFF;
-      let value = self.wrapped_mem_read_u16(addr as u32);
+      let value = self.mem_read_u16(addr as u32);
       self._no_wrapped_push_u16(value as u16);
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
@@ -885,7 +972,17 @@ impl CPU {
         }
     }
     pub fn plb(&mut self, mode: &AddressingMode) {
-      self.data_bank = self._force_wrapped_pop();
+      // Test 03d9: plb
+      //    Input: A=$1234 X=$3456 Y=$5678 P=$30 E=1 S=$01ff ($000200)=$3d
+      //    Expected output: A=$1234 X=$0056 Y=$0078 P=$30 E=1 S=0100 DBR=3d
+      //    Note: This tests undocumented behavior - see the cputest README file for details
+      // - エミュレーションモードでS=$1FFの場合、PLB命令は$100ではなく$200から読み込むべきです。
+      // これは、CPUマニュアルにスタックページ外にアクセスできる命令として記載されていないにもかかわらず発生します。
+      if self.is_emulation_mode() && self.stack_pointer == 0x01FF {
+        self.data_bank = self._pop();
+      } else {
+        self.data_bank = self._force_wrapped_pop();
+      }
       self._update_zero_and_negative_flags(self.data_bank as u16, false);
     }
     pub fn per(&mut self, mode: &AddressingMode) {
@@ -1089,22 +1186,14 @@ impl CPU {
     pub fn sty(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let y = self.get_register_y();
-      // println!("STY ADDR: {:06X} => {:04X}", addr, y);
-      if self.is_native_mode() {
-        self.mem_write_u16(addr, y);
-      } else {
-        self.mem_write(addr, y as u8);
-      }
+      // println!("STY(E={}) ADDR: {:06X} => {:04X}", self.is_emulation_mode(), addr, y);
+      self.mem_write_auto_xy(addr, y);
     }
 
     pub fn stx(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let x = self.get_register_x();
-      if self.is_native_mode() {
-        self.mem_write_u16(addr, x);
-      } else {
-        self.mem_write(addr, x as u8);
-      }
+      self.mem_write_auto_xy(addr, x);
     }
 
     pub fn sta(&mut self, mode: &AddressingMode) {
@@ -1216,7 +1305,17 @@ impl CPU {
       } else {
         self.current_op.emulation.bytes
       };
+      
+      // Test 0277: jsr ($FFFF,x)
+      // Input: A=$1234 X=$0081 Y=$5678 P=$30 E=1 S=$0100 DBR=$7f ($7e7000)=$fc ($7e7001)=$ff ($7e7002)=$ff ($7e7003)=$db ($7e0080)=$00 ($7e0081)=$80
+      // Expected output: A=$1234 X=$0081 Y=$0078 P=$30 E=1 S=01fe ($0000ff)=$02 ($000100)=$70
+      // Additional initialization or checks are performed - see assembly      
+
+      // JSR:Absolute_Indexed_Indirect ADDR: 008000
+      
       let addr = self.get_operand_address(mode);
+
+      // println!("JSR:{:?} ADDR: {:06X}", mode, addr);
       match mode {
         AddressingMode::Absolute_Long => {
           self._push(self.program_bank);
@@ -1227,13 +1326,20 @@ impl CPU {
       let run_func_correction = 1;
       let last_byte_correction = 1;
       let pc = self.program_counter as u32 + bytes as u32 - run_func_correction - last_byte_correction;
-      self._push_u16(pc as u16);
+      // JSR:Absolute_Indexed_Indirect ADDR: 008000
+      // STACK PUSH: 0100 => 70
+      // STACK PUSH: 01FF => 02
+      if mode == &AddressingMode::Absolute_Indexed_Indirect && self.is_emulation_mode() {
+        self._no_wrapped_push_u16(pc as u16);
+      } else {
+        self._push_u16(pc as u16);
+      }
       self.program_counter = addr as u16;
     }
 
     pub fn _push(&mut self, value: u8) {
       let addr = self.stack_pointer as u32;
-      println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
       self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
@@ -1241,7 +1347,7 @@ impl CPU {
     pub fn _pop(&mut self) -> u8 {
       self.stack_pointer = self.stack_pointer.wrapping_add(1);
       let value = self.mem_read(self.stack_pointer as u32);
-      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
@@ -1279,7 +1385,7 @@ impl CPU {
       self.stack_pointer = self.stack_pointer.wrapping_add(1);
       self.apply_mode(true);
       let value = self.mem_read(self.stack_pointer as u32);
-      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
@@ -1292,7 +1398,7 @@ impl CPU {
     pub fn jmp(&mut self, mode: &AddressingMode) {
         // opscodes.rsのcall関数内でprogram_counterを変更しないようにする必要あり。
         let addr = self.get_operand_address(mode);
-        println!("ADDR: {:06X}", addr);
+        // println!("ADDR: {:06X}", addr);
         self.program_counter = addr as u16;
         match mode {
           AddressingMode::Absolute_Long
@@ -1376,7 +1482,7 @@ impl CPU {
       let target = self.get_register_y();
       let addr = self.get_operand_address(mode);
       let value = if self.is_index_register_16bit_mode() {
-        self.wrapped_mem_read_u16(addr)
+        self.mem_read_u16(addr)
       } else {
         self.mem_read(addr) as u16
       };
@@ -1386,7 +1492,11 @@ impl CPU {
           self.clc(&AddressingMode::Implied);
       }
       let value = target.wrapping_sub(value);
+      // CPY: M:Absolute, V:4F00, Y:ABCD DBR:7E
+      // ==> CPY ST: 01
+      //println!("CPY: A16:{} R16:{} M:{:?}, V:{:04X}, Y:{:04X} DBR:{:02X} ADDR: {:06X}", self.is_accumulator_16bit_mode(), self.is_index_register_16bit_mode(), mode, value, target, self.data_bank, addr);
       self.update_zero_and_negative_flags_xy(value);
+      //println!(" ==> CPY ST: {:02X}", self.status);
     }
 
     pub fn cpx(&mut self, mode: &AddressingMode) {
@@ -1410,7 +1520,7 @@ impl CPU {
       let target = self.get_register_a();
       let addr = self.get_operand_address(mode);
       let value = self.mem_read_auto(addr);
-      println!("CMP: A:{:04X} V:{:04X}  ADDR:{:06X}", target, value, addr);
+      // println!("CMP: {:?} A:{:04X} V:{:04X}  ADDR:{:06X}", mode, target, value, addr);
       if target >= value {
           self.sec(&AddressingMode::Implied);
       } else {
@@ -1778,6 +1888,13 @@ impl CPU {
       let value = self.mem_read_u16(addr);
       let a: u16 = self.get_register_a();
       let mut carry = (self.status & FLAG_CARRY) as u16;
+
+      // Test 0024: adc ($EF,x)
+      // Input: A=$1112 X=$0010 Y=$5678 P=$21 E=1 DBR=$7f D=$0100 ($0001ff)=$34 ($000100)=$12 ($7f1234)=$ed
+      // Expected output: A=$1100 X=$0010 Y=$0078 P=$33 E=1 ($7f1234)=$ed
+      // 
+      // ADC:008F4E(EF) Direct_Page_Indexed_Indirect_by_X, D:false A:0012 M:0000 X:0010 C:1, ADDR:7FEE34
+      //   => A:1113
 
       let mut result: u16 = 0;
       let mut value_l = a;
