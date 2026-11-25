@@ -538,7 +538,7 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
-      self.hvirq();
+      // self.hvirq();
         // if let Some(_nmi) = self.bus.poll_nmi_status() {
         //     self.interrupt_nmi();
         // }
@@ -572,6 +572,8 @@ impl CPU {
       if !self.bus.ppu.hirq_flag && !self.bus.ppu.virq_flag {
         return
       }
+      // TODO フラグチェック
+
       println!("H/V IRQ");
       if self.status & FLAG_INTERRRUPT != 0 {
 
@@ -585,7 +587,11 @@ impl CPU {
         self.status = self.status & !FLAG_DECIMAL;
         self.status = self.status | FLAG_INTERRRUPT;
         self.program_bank = 0x00;
-        self.program_counter = 0xFFEE;
+        if self.is_emulation_mode() {
+          self.program_counter = self.mem_read_u16(0xFFFE);
+        } else {
+          self.program_counter = self.mem_read_u16(0xFFEE);
+        }
         self.bus.ppu.hirq_flag = false;
         self.bus.ppu.virq_flag = false;
       }
