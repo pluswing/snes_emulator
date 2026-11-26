@@ -357,7 +357,11 @@ impl CPU {
               // [$12]のように表します。
               let base = self.mem_read(pc) as u32;
               let base = (self.direct_page as u32).wrapping_add(base) & 0x00FFFF;
-              let addr = self.wrapped_mem_read_u16(base) as u32;
+              let addr = if self.is_native_mode() {
+                self.wrapped_mem_read_u16(base) as u32
+              } else {
+                self.force_wrapped_mem_read_u16(base) as u32
+              };
               let bank = self.mem_read((base + 2) & 0x00FFFF);
               ((bank as u32) << 16) | addr as u32
             }
@@ -373,7 +377,17 @@ impl CPU {
                 addr.wrapping_add(self.get_register_x() as u32)
               };
               let addr = addr & 0x00FFFF;
-              let addr = self.force_wrapped_mem_read_u16(addr) as u32;
+              let addr = if self.is_native_mode() {
+                self.force_wrapped_mem_read_u16(addr) as u32
+              } else {
+                // エミュレーションモードでDの下位バイトがゼロ以外の場合、(direct,X)アドレッシングモードの動作が奇妙になります。
+                // 間接アドレスの下位バイトは、ページ折り返しなしで`direct_addr+X+D`から読み取られます（これは想定どおりです）。上位バイトは`direct_addr+X+D+1`から読み取られますが、+1はページ内で折り返し処理されます。
+                // 例：Emulation=1、D=$11A、X=$EE、命令が`lda ($F7,X)`の場合、$F7 + $11A + $EE = $2FFとなります。アドレスの下位バイトは$2FFから、上位バイトは$200から読み取られます。
+                // この動作は、このアドレッシングモードにのみ適用され、他の間接モードでは発生しません。
+                let lo = self.mem_read(addr) as u32;
+                let hi = self.mem_read((addr & 0xFFFF00) | ((addr + 1) & 0x0000FF))  as u32;
+                (hi << 8) | (lo as u32)
+              };
               (self.data_bank as u32) << 16 | addr
             }
             // LDA (dp), Y => B1 dp
@@ -393,10 +407,10 @@ impl CPU {
               let addr = self.mem_read(pc);
               let addr = (self.direct_page as u32).wrapping_add(addr as u32);
               let addr = addr & 0x00FFFF;
-              let base = self.wrapped_mem_read_u16(addr);
-              // println!("ADDR: {:06X}", addr);
+              let base = self.mem_read_u16(addr);
+              // println!("ADDR: {:06X} V={:04X}", addr, base);
               let bank = if (self.direct_page & 0x00FF) == 0x00 && self.is_emulation_mode() {
-                let addr = addr & 0xFF00 | (addr + 2) & 0x00FF;
+                let addr = (addr + 1) & 0xFF00 | (addr + 2) & 0x00FF;
                 self.mem_read(addr)
               } else {
                 self.mem_read((addr + 2) & 0xFFFF)
@@ -438,7 +452,7 @@ impl CPU {
               let addr = self.force_wrapped_mem_read_u16(addr) as u32;
               let addr = addr.wrapping_add(self.get_register_y() as u32);
               let addr = ((self.data_bank as u32) << 16).wrapping_add(addr);
-              println!("ADDR: {:06X}", addr);
+              // println!("ADDR: {:06X}", addr);
               addr & 0xFFFFFF
             }
             AddressingMode::NoneAddressing => {
@@ -558,7 +572,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                println!("{:06X} {}", pc, op.name);
+                // println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
@@ -1205,7 +1219,7 @@ impl CPU {
     pub fn lda(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read_auto(addr);
-        println!("LDA: ADDR:{:06X} V:{:04X} => A REG", addr, value);
+        // println!("LDA: ADDR:{:06X} V:{:04X} => A REG", addr, value);
         self.set_register_a(value);
         let a = self.get_register_a();
         self.update_zero_and_negative_flags(a);
@@ -1239,7 +1253,7 @@ impl CPU {
 
     pub fn _push(&mut self, value: u8) {
       let addr = self.stack_pointer as u32;
-      println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK PUSH: {:04X} => {:02X}", self.stack_pointer, value);
       self.mem_write(addr, value);
       self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
@@ -1247,7 +1261,7 @@ impl CPU {
     pub fn _pop(&mut self) -> u8 {
       self.stack_pointer = self.stack_pointer.wrapping_add(1);
       let value = self.mem_read(self.stack_pointer as u32);
-      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
@@ -1285,7 +1299,7 @@ impl CPU {
       self.stack_pointer = self.stack_pointer.wrapping_add(1);
       self.apply_mode(true);
       let value = self.mem_read(self.stack_pointer as u32);
-      println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
+      // println!("STACK POP: {:04X} => {:02X}", self.stack_pointer, value);
       value
     }
 
@@ -1298,7 +1312,7 @@ impl CPU {
     pub fn jmp(&mut self, mode: &AddressingMode) {
         // opscodes.rsのcall関数内でprogram_counterを変更しないようにする必要あり。
         let addr = self.get_operand_address(mode);
-        println!("ADDR: {:06X}", addr);
+        // println!("ADDR: {:06X}", addr);
         self.program_counter = addr as u16;
         match mode {
           AddressingMode::Absolute_Long
@@ -1416,7 +1430,7 @@ impl CPU {
       let target = self.get_register_a();
       let addr = self.get_operand_address(mode);
       let value = self.mem_read_auto(addr);
-      println!("CMP: A:{:04X} V:{:04X}  ADDR:{:06X}", target, value, addr);
+      // println!("CMP: A:{:04X} V:{:04X}  ADDR:{:06X}", target, value, addr);
       if target >= value {
           self.sec(&AddressingMode::Implied);
       } else {
@@ -1784,6 +1798,8 @@ impl CPU {
       let value = self.mem_read_u16(addr);
       let a: u16 = self.get_register_a();
       let mut carry = (self.status & FLAG_CARRY) as u16;
+
+      println!("ADC: {:?} ADDR={:04X} A={:04X} M={:04X} E={}", mode, addr, a, value, self.is_emulation_mode());
 
       let mut result: u16 = 0;
       let mut value_l = a;

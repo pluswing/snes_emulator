@@ -474,7 +474,7 @@ impl PPU {
   fn write_vmdatal(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_lsb(self.vmdata[vmadd], data);
-    println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
+    // println!("write_vmdatal({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 0 {
       self.increment_vmadd();
     }
@@ -483,7 +483,7 @@ impl PPU {
   fn write_vmdatah(&mut self, data: u8) {
     let vmadd = (self.vmadd & 0x7FFF) as usize;
     self.vmdata[vmadd] = self.replace_msb(self.vmdata[vmadd], data);
-    println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
+    // println!("write_vmdatah({:02X}) addr: {:04X}, data: {:04X}", data, vmadd, self.vmdata[vmadd]);
     if self.increment_timing() == 1 {
       self.increment_vmadd();
     }
@@ -539,7 +539,7 @@ impl PPU {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
-    println!("WRITE PPU ADDR: {:04X} => {:02X}", addr, data);
+    // println!("WRITE PPU ADDR: {:04X} => {:02X}", addr, data);
     match addr {
       0x2100 => self.inidisp = data,
       0x2101 => self.obsel = data,
@@ -610,7 +610,7 @@ impl PPU {
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
-    println!("READ PPU ADDR: {:04X}", addr);
+    // println!("READ PPU ADDR: {:04X}", addr);
     match addr {
       0x2134 => {
         // PPU積レジスタ (下位8bit)

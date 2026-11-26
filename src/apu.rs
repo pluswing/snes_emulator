@@ -102,7 +102,7 @@ impl APU {
   pub fn run(&mut self) {
     let op = self.memory[self.program_counter as usize];
     self.inc_program_counter();
-    println!("APU run OP: {:04X}", op);
+    // println!("APU run OP: {:04X}", op);
 /*
     match op {
       0x00 => self.nop(),

@@ -442,7 +442,7 @@ impl Mem for Bus {
           0x4210..=0x4212 => self.ppu.read(addr),
           0x4213 => self.rdio,
           0x4214..=0x421F => {
-            println!("mem_read({:02X}:{:04X})", bank, addr);
+            // println!("mem_read({:02X}:{:04X})", bank, addr);
             0
           }
           0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
