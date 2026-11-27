@@ -441,15 +441,15 @@ impl Mem for Bus {
           0x2180..=0x2183 => self.read_wram_registers(addr),
           0x4210..=0x4212 => self.ppu.read(addr),
           0x4213 => self.rdio,
-          0x4214..=0x421F => {
-            // println!("mem_read({:02X}:{:04X})", bank, addr);
-            0
-          }
-          0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
-          0x6000..=0x7FFF => {
-            // FIXME カートリッジ 予約済み領域
-            0x00 // FIXME 何が返るのが正解？
-          }
+          // 0x4214..=0x421F => {
+          //   // println!("mem_read({:02X}:{:04X})", bank, addr);
+          //   0
+          // }
+          // 0x454C | 0x5241 | 0x5242 => 0, // TODO マリオコレクションでアクセス
+          // 0x6000..=0x7FFF => {
+          //   // FIXME カートリッジ 予約済み領域
+          //   0x00 // FIXME 何が返るのが正解？
+          // }
           0x8000..=0xFFFF => self.cartridge.read(bank, addr),
           _ => panic!("not implemented mem_read({:02X}:{:04X})", bank, addr)
         }
@@ -495,7 +495,7 @@ impl Mem for Bus {
           0x2100..=0x213F => self.ppu.write(addr, data),
           0x2140..=0x217F => self.apu.write(addr, data),
           0x2180..=0x2183 => self.write_wram_registers(addr, data),
-          0x2184 => {}, // TODO マリオコレクションでアクセス（これなに？）
+          // 0x2184 => {}, // TODO マリオコレクションでアクセス（これなに？）
           0x4016 => {}, // 4016h WO  - JOYWR - Joypad出力
           0x4200..=0x4201 => self.ppu.write(addr, data),
           0x420B => self.write_dma_registers(addr, data),
@@ -508,10 +508,10 @@ impl Mem for Bus {
           0x4300..=0x437F => {
             self.write_dma_registers(addr, data);
           }
-          0x6000..=0x7FFF => {
-            // TODO 予約済み領域
-            panic!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
-          }
+          // 0x6000..=0x7FFF => {
+          //   // TODO 予約済み領域
+          //   panic!("mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
+          // }
           0x8000..=0xFFFF => self.cartridge.write(bank, addr, data),
           _ => panic!("not implemented mem_write({:02X}:{:04X}, {:02X})", bank, addr, data)
         }

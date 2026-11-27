@@ -276,7 +276,7 @@ impl CPU {
                 addr & 0xFFFFFF
             }
             AddressingMode::Absolute_Indexed_by_Y => {
-                let base = self.wrapped_mem_read_u16(pc);
+                let base = self.mem_read_u16(pc);
                 let addr = ((self.data_bank as u32) << 16) | base as u32;
                 let addr = addr.wrapping_add(self.get_register_y() as u32);
                 addr & 0xFFFFFF
@@ -493,7 +493,7 @@ impl CPU {
         self.mem_write(pos + 1, hi);
     }
 
-    pub fn mem_read_auto(&mut self, pos: u32) -> u16 {
+    fn mem_read_auto(&mut self, pos: u32) -> u16 {
         let lo = self.mem_read(pos) as u16;
         if self.is_accumulator_16bit_mode() {
           let hi = self.mem_read(pos + 1) as u16;
@@ -503,11 +503,20 @@ impl CPU {
         }
     }
 
-    pub fn mem_write_auto(&mut self, pos: u32, data: u16) {
+    fn mem_write_auto(&mut self, pos: u32, data: u16) {
         let hi = (data >> 8) as u8;
         let lo = (data & 0x00FF) as u8;
         self.mem_write(pos, lo);
         if self.is_accumulator_16bit_mode() {
+          self.mem_write(pos + 1, hi);
+        }
+    }
+
+    fn mem_write_auto_xy(&mut self, pos: u32, data: u16) {
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0x00FF) as u8;
+        self.mem_write(pos, lo);
+        if self.is_index_register_16bit_mode() {
           self.mem_write(pos + 1, hi);
         }
     }
@@ -572,7 +581,7 @@ impl CPU {
         self.apply_mode(true);
         match op {
             Some(op) => {
-                // println!("{:06X} {}", pc, op.name);
+                println!("{:06X} {}", pc, op.name);
                 call(self, &op);
                 self.bus.tick();
             }
@@ -711,7 +720,7 @@ impl CPU {
       let addr = self.get_operand_address(mode);
       let addr = self.mem_read(addr);
       let addr = self.direct_page.wrapping_add(addr as u16) & 0x00FFFF;
-      let value = self.wrapped_mem_read_u16(addr as u32);
+      let value = self.mem_read_u16(addr as u32);
       self._no_wrapped_push_u16(value as u16);
     }
     pub fn plx(&mut self, mode: &AddressingMode) {
@@ -905,7 +914,14 @@ impl CPU {
         }
     }
     pub fn plb(&mut self, mode: &AddressingMode) {
-      self.data_bank = self._force_wrapped_pop();
+      // from https://github.com/gilyon/snes-tests
+      // エミュレーションモードでS=$1FFの場合、PLB命令は$100ではなく$200から読み込む必要があります。
+      // これは、CPUマニュアルにスタックページ外にアクセスできる命令として記載されていないにもかかわらずです。
+      self.data_bank = if self.is_emulation_mode() && self.stack_pointer == 0x01FF {
+        self._pop()
+      } else {
+        self._force_wrapped_pop()
+      };
       self._update_zero_and_negative_flags(self.data_bank as u16, false);
     }
     pub fn per(&mut self, mode: &AddressingMode) {
@@ -1109,22 +1125,14 @@ impl CPU {
     pub fn sty(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let y = self.get_register_y();
-      // println!("STY ADDR: {:06X} => {:04X}", addr, y);
-      if self.is_native_mode() {
-        self.mem_write_u16(addr, y);
-      } else {
-        self.mem_write(addr, y as u8);
-      }
+      // println!("STY ADDR: {:06X} => {:04X} E={}", addr, y, self.is_emulation_mode());
+      self.mem_write_auto_xy(addr, y);
     }
 
     pub fn stx(&mut self, mode: &AddressingMode) {
       let addr = self.get_operand_address(mode);
       let x = self.get_register_x();
-      if self.is_native_mode() {
-        self.mem_write_u16(addr, x);
-      } else {
-        self.mem_write(addr, x as u8);
-      }
+      self.mem_write_auto_xy(addr, x);
     }
 
     pub fn sta(&mut self, mode: &AddressingMode) {
@@ -1247,7 +1255,11 @@ impl CPU {
       let run_func_correction = 1;
       let last_byte_correction = 1;
       let pc = self.program_counter as u32 + bytes as u32 - run_func_correction - last_byte_correction;
-      self._push_u16(pc as u16);
+      if self.is_emulation_mode() && mode == &AddressingMode::Absolute_Indexed_Indirect {
+        self._no_wrapped_push_u16(pc as u16);
+      } else {
+        self._push_u16(pc as u16);
+      }
       self.program_counter = addr as u16;
     }
 
@@ -1430,7 +1442,7 @@ impl CPU {
       let target = self.get_register_a();
       let addr = self.get_operand_address(mode);
       let value = self.mem_read_auto(addr);
-      // println!("CMP: A:{:04X} V:{:04X}  ADDR:{:06X}", target, value, addr);
+      println!("CMP:{:?} A:{:04X} V:{:04X}  ADDR:{:06X}", mode, target, value, addr);
       if target >= value {
           self.sec(&AddressingMode::Implied);
       } else {
@@ -1799,7 +1811,7 @@ impl CPU {
       let a: u16 = self.get_register_a();
       let mut carry = (self.status & FLAG_CARRY) as u16;
 
-      println!("ADC: {:?} ADDR={:04X} A={:04X} M={:04X} E={}", mode, addr, a, value, self.is_emulation_mode());
+      // println!("ADC: {:?} ADDR={:04X} A={:04X} M={:04X} E={}", mode, addr, a, value, self.is_emulation_mode());
 
       let mut result: u16 = 0;
       let mut value_l = a;
